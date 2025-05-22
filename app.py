@@ -1,25 +1,77 @@
 from flask import Flask, render_template, request, jsonify
-from safety_margin_calc_naver import get_historical_metrics, calculate_intrinsic_value, search_stock_codes
+from safety_margin_calc_naver import get_historical_metrics, calculate_intrinsic_value, search_stock_codes, analyze_stock, get_top_safety_margin_stocks
+from datetime import datetime
+import os
+import threading
+import time
 
 app = Flask(__name__)
 
+def background_update():
+    """백그라운드에서 주기적으로 데이터를 업데이트하는 함수"""
+    while True:
+        try:
+            print(f"[{datetime.now()}] 데이터 업데이트 시작...")
+            get_top_safety_margin_stocks(force_update=True)
+            print(f"[{datetime.now()}] 데이터 업데이트 완료")
+        except Exception as e:
+            print(f"[{datetime.now()}] 데이터 업데이트 중 오류 발생: {str(e)}")
+        
+        # 1시간 대기
+        time.sleep(3600)
+
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # 상위 30개 종목 가져오기
+    top_stocks = get_top_safety_margin_stocks()
+    
+    # safety_margin_results.json 파일의 수정 시간을 마지막 업데이트 시간으로 사용
+    last_update = datetime.fromtimestamp(os.path.getmtime('safety_margin_results.json')).strftime("%Y-%m-%d %H:%M")
+    
+    return render_template('index.html', top_stocks=top_stocks, last_update=last_update)
 
-@app.route('/search', methods=['POST'])
+@app.route('/search')
 def search():
-    company_name = request.form.get('company_name')
-    if not company_name:
-        return jsonify({'error': '종목명을 입력해주세요.'})
+    query = request.args.get('query', '')
+    if not query:
+        return jsonify([])
+    
+    results = search_stock_codes(query)
+    return jsonify(results)
+
+@app.route('/analyze')
+def analyze():
+    code = request.args.get('code')
+    if not code:
+        return jsonify({'error': '종목코드가 필요합니다.'})
     
     try:
-        results = search_stock_codes(company_name)
-        if not results:
-            return jsonify({'error': '검색 결과가 없습니다.'})
-        return jsonify({'results': results})
+        result = analyze_stock(code)
+        if result.get('error'):
+            return jsonify(result)
+            
+        # 재무지표 데이터 포맷팅
+        historical_data = []
+        if result.get('historical_data'):
+            for period, data in result['historical_data'].items():
+                historical_data.append({
+                    'period': period,
+                    'PBR': float(data['PBR']),
+                    'EPS': float(data['EPS']),
+                    'BPS': float(data['BPS'])
+                })
+        
+        return jsonify({
+            'stock_name': result['stock_name'],
+            'current_price': result['current_price'],
+            'intrinsic_value': result['intrinsic_value'],
+            'safety_margin': result['safety_margin'],
+            'treasury_ratio': result['treasury_ratio'],
+            'historical_data': historical_data
+        })
+        
     except Exception as e:
-        return jsonify({'error': f'검색 중 오류가 발생했습니다: {str(e)}'})
+        return jsonify({'error': f'오류가 발생했습니다: {str(e)}'})
 
 @app.route('/calculate', methods=['POST'])
 def calculate():
@@ -68,4 +120,9 @@ def calculate():
         return jsonify({'error': f'오류가 발생했습니다: {str(e)}'})
 
 if __name__ == '__main__':
-    app.run(debug=True) 
+    # 백그라운드 업데이트 스레드 시작
+    update_thread = threading.Thread(target=background_update, daemon=True)
+    update_thread.start()
+    
+    # Flask 앱 실행
+    app.run(host='0.0.0.0', port=7777, debug=False) 

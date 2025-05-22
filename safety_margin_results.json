@@ -1,0 +1,242 @@
+[
+  {
+    "code": "151860",
+    "name": "KG에코솔루션",
+    "current_price": 5370.0,
+    "intrinsic_value": 40578.74834562299,
+    "safety_margin": 655.65639377324,
+    "treasury_ratio": 11.85
+  },
+  {
+    "code": "007860",
+    "name": "서연",
+    "current_price": 8250.0,
+    "intrinsic_value": 46967.18947178654,
+    "safety_margin": 469.2992663246854,
+    "treasury_ratio": 7.55
+  },
+  {
+    "code": "000540",
+    "name": "흥국화재",
+    "current_price": 3720.0,
+    "intrinsic_value": 20231.833333333332,
+    "safety_margin": 443.86648745519705,
+    "treasury_ratio": 0
+  },
+  {
+    "code": "001230",
+    "name": "동국홀딩스",
+    "current_price": 7520.0,
+    "intrinsic_value": 38668.711656441716,
+    "safety_margin": 414.21159117608664,
+    "treasury_ratio": 2.2
+  },
+  {
+    "code": "003240",
+    "name": "태광산업",
+    "current_price": 789000.0,
+    "intrinsic_value": 3942861.7101027467,
+    "safety_margin": 399.72898733875115,
+    "treasury_ratio": 24.41
+  },
+  {
+    "code": "011785",
+    "name": "금호석유화학우",
+    "current_price": 53200.0,
+    "intrinsic_value": 224795.3488372093,
+    "safety_margin": 322.5476481902431,
+    "treasury_ratio": 14.0
+  },
+  {
+    "code": "001390",
+    "name": "KG케미칼",
+    "current_price": 3755.0,
+    "intrinsic_value": 15429.333333333334,
+    "safety_margin": 310.90102086107413,
+    "treasury_ratio": 0
+  },
+  {
+    "code": "023600",
+    "name": "삼보판지",
+    "current_price": 8160.0,
+    "intrinsic_value": 32711.299085344886,
+    "safety_margin": 300.8737633007952,
+    "treasury_ratio": 3.06
+  },
+  {
+    "code": "001450",
+    "name": "현대해상",
+    "current_price": 22250.0,
+    "intrinsic_value": 87574.20286550374,
+    "safety_margin": 293.59192299102807,
+    "treasury_ratio": 12.29
+  },
+  {
+    "code": "017390",
+    "name": "서울가스",
+    "current_price": 54200.0,
+    "intrinsic_value": 210749.0041528943,
+    "safety_margin": 288.8358010201002,
+    "treasury_ratio": 21.34
+  },
+  {
+    "code": "004360",
+    "name": "세방",
+    "current_price": 12680.0,
+    "intrinsic_value": 47701.341078600126,
+    "safety_margin": 276.19354162933854,
+    "treasury_ratio": 7.04
+  },
+  {
+    "code": "005010",
+    "name": "휴스틸",
+    "current_price": 4700.0,
+    "intrinsic_value": 17425.166666666664,
+    "safety_margin": 270.74822695035454,
+    "treasury_ratio": 0
+  },
+  {
+    "code": "003120",
+    "name": "일성아이에스",
+    "current_price": 18620.0,
+    "intrinsic_value": 68101.13821138212,
+    "safety_margin": 265.7418808344904,
+    "treasury_ratio": 48.75
+  },
+  {
+    "code": "003830",
+    "name": "대한화섬",
+    "current_price": 121300.0,
+    "intrinsic_value": 428284.4160628761,
+    "safety_margin": 253.0786612224865,
+    "treasury_ratio": 18.57
+  },
+  {
+    "code": "078930",
+    "name": "GS",
+    "current_price": 39500.0,
+    "intrinsic_value": 131086.2172434487,
+    "safety_margin": 231.8638411226549,
+    "treasury_ratio": 0.02
+  },
+  {
+    "code": "010060",
+    "name": "OCI홀딩스",
+    "current_price": 67600.0,
+    "intrinsic_value": 209273.66666666666,
+    "safety_margin": 209.57642998027612,
+    "treasury_ratio": 0
+  },
+  {
+    "code": "900290",
+    "name": "GRT",
+    "current_price": 3005.0,
+    "intrinsic_value": 9249.166666666668,
+    "safety_margin": 207.79256794231839,
+    "treasury_ratio": 0
+  },
+  {
+    "code": "194370",
+    "name": "제이에스코퍼레이션",
+    "current_price": 9060.0,
+    "intrinsic_value": 26643.333333333332,
+    "safety_margin": 194.0765268579838,
+    "treasury_ratio": 0
+  },
+  {
+    "code": "005385",
+    "name": "현대차우",
+    "current_price": 146000.0,
+    "intrinsic_value": 422399.7296840682,
+    "safety_margin": 189.31488334525218,
+    "treasury_ratio": 1.35
+  },
+  {
+    "code": "005387",
+    "name": "현대차2우B",
+    "current_price": 146300.0,
+    "intrinsic_value": 422399.7296840682,
+    "safety_margin": 188.72161974304043,
+    "treasury_ratio": 1.35
+  },
+  {
+    "code": "950130",
+    "name": "엑세스바이오",
+    "current_price": 6430.0,
+    "intrinsic_value": 17595.73098787944,
+    "safety_margin": 173.65055968708305,
+    "treasury_ratio": 6.77
+  },
+  {
+    "code": "036460",
+    "name": "한국가스공사",
+    "current_price": 37950.0,
+    "intrinsic_value": 98190.71292574571,
+    "safety_margin": 158.73705645782798,
+    "treasury_ratio": 5.46
+  },
+  {
+    "code": "005830",
+    "name": "DB손해보험",
+    "current_price": 95100.0,
+    "intrinsic_value": 244855.36296820347,
+    "safety_margin": 157.47146474048733,
+    "treasury_ratio": 15.19
+  },
+  {
+    "code": "024110",
+    "name": "기업은행",
+    "current_price": 15260.0,
+    "intrinsic_value": 37942.5,
+    "safety_margin": 148.64023591087812,
+    "treasury_ratio": 0
+  },
+  {
+    "code": "316140",
+    "name": "우리금융지주",
+    "current_price": 17980.0,
+    "intrinsic_value": 42928.55942175155,
+    "safety_margin": 138.75728265712766,
+    "treasury_ratio": 0.85
+  },
+  {
+    "code": "005380",
+    "name": "현대차",
+    "current_price": 182400.0,
+    "intrinsic_value": 422399.7296840682,
+    "safety_margin": 131.57879916889704,
+    "treasury_ratio": 1.35
+  },
+  {
+    "code": "035600",
+    "name": "KG이니시스",
+    "current_price": 8700.0,
+    "intrinsic_value": 19730.503795721186,
+    "safety_margin": 126.78739995081823,
+    "treasury_ratio": 3.4
+  },
+  {
+    "code": "049070",
+    "name": "인탑스",
+    "current_price": 15360.0,
+    "intrinsic_value": 34171.011659062926,
+    "safety_margin": 122.46752382202426,
+    "treasury_ratio": 7.94
+  },
+  {
+    "code": "161390",
+    "name": "한국타이어앤테크놀로지",
+    "current_price": 37600.0,
+    "intrinsic_value": 83596.50013539128,
+    "safety_margin": 122.3311173813598,
+    "treasury_ratio": 1.52
+  },
+  {
+    "code": "010690",
+    "name": "화신",
+    "current_price": 7660.0,
+    "intrinsic_value": 16822.094931832646,
+    "safety_margin": 119.60959441034787,
+    "treasury_ratio": 0.49
+  }
+]

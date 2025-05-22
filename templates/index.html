@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>내재가치 계산기</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js"></script>
     <style>
         body { padding: 20px; }
         .result-section { margin-top: 20px; }
@@ -27,229 +30,272 @@
             color: #0d6efd;
             margin-bottom: 10px;
         }
+        .stock-card {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .stock-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .safety-margin-positive {
+            color: #198754;
+        }
+        .safety-margin-negative {
+            color: #dc3545;
+        }
+        .stock-details {
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #dee2e6;
+        }
+        .last-update {
+            color: #6c757d;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+        .search-results {
+            position: absolute;
+            z-index: 1000;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            max-height: 300px;
+            overflow-y: auto;
+            width: 100%;
+            display: none;
+        }
+        .search-results .list-group-item {
+            cursor: pointer;
+        }
+        .search-results .list-group-item:hover {
+            background-color: #f8f9fa;
+        }
+        .tooltip-inner {
+            max-width: 300px;
+            text-align: left;
+            white-space: pre-line;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1 class="mb-4">내재가치 계산기</h1>
+    <div class="container py-5">
+        <h1 class="text-center mb-5">
+            내재가치 계산기
+            <i class="bi bi-info-circle" 
+               data-bs-toggle="tooltip" 
+               data-bs-placement="right" 
+               data-bs-html="true"
+               title="<b>내재가치 계산 방법</b><br><br>
+                      <b>1. EPS 가중평균 계산:</b><br>
+                      - 최근년도 EPS × 3<br>
+                      - 전년도 EPS × 2<br>
+                      - 전전년도 EPS × 1<br>
+                      - 가중평균 = (최근년도EPS×3 + 전년도EPS×2 + 전전년도EPS×1) ÷ 6<br><br>
+                      <b>2. 내재가치 계산:</b><br>
+                      - 기본 내재가치 = (EPS 가중평균 × 10 + 최근년도 BPS) ÷ 2<br>
+                      - 자기주식이 있는 경우: 내재가치 = 기본 내재가치 × (100 ÷ (100 - 자기주식비율))<br><br>
+                      <b>3. 안전마진 계산:</b><br>
+                      - 안전마진 = ((내재가치 - 현재가) ÷ 현재가) × 100">
+            </i>
+        </h1>
         
-        <div class="row">
+        <!-- 종목 검색 섹션 -->
+        <div class="row justify-content-center mb-5">
             <div class="col-md-6">
-                <div class="mb-3">
-                    <label for="companyName" class="form-label">종목명 검색</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="companyName" placeholder="회사명을 입력하세요">
-                        <button class="btn btn-primary" onclick="searchCompany()">검색</button>
-                    </div>
-                    <div id="searchResults" class="search-results"></div>
+                <div class="input-group">
+                    <input type="text" id="searchInput" class="form-control" placeholder="종목명을 입력하세요">
+                    <button class="btn btn-primary" onclick="searchStock()">검색</button>
                 </div>
-                
-                <form id="calcForm" onsubmit="calculateValue(event)">
-                    <input type="hidden" id="ticker">
-                </form>
+                <div id="searchResults" class="list-group mt-2"></div>
             </div>
         </div>
 
-        <div class="formula-section">
-            <h5>내재가치 계산 방법</h5>
-            <p>1. EPS 가중평균 계산:</p>
-            <ul>
-                <li>최근년도 EPS × 3</li>
-                <li>전년도 EPS × 2</li>
-                <li>전전년도 EPS × 1</li>
-                <li>가중평균 = (최근년도EPS×3 + 전년도EPS×2 + 전전년도EPS×1) ÷ 6</li>
-            </ul>
-            <p>2. 내재가치 계산:</p>
-            <ul>
-                <li>기본 내재가치 = (EPS 가중평균 × 10 + 최근년도 BPS) ÷ 2</li>
-                <li>자기주식이 있는 경우: 내재가치 = 기본 내재가치 × (100 ÷ (100 - 자기주식비율))</li>
-            </ul>
-            <p>3. 안전마진 계산:</p>
-            <ul>
-                <li>안전마진 = ((내재가치 - 현재가) ÷ 현재가) × 100</li>
-            </ul>
-        </div>
-
-        <div class="loading">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Loading...</span>
-            </div>
-        </div>
-
-        <div class="error-message"></div>
-
-        <div class="result-section" style="display: none;">
-            <h2 id="stockName"></h2>
-            <div class="row">
-                <div class="col-md-6">
-                    <div class="card mb-3">
-                        <div class="card-body">
-                            <h5 class="card-title">현재가</h5>
-                            <p class="card-text" id="currentPrice"></p>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="card mb-3">
-                        <div class="card-body">
-                            <h5 class="card-title">내재가치</h5>
-                            <p class="card-text" id="intrinsicValue"></p>
+        <!-- 검색 결과 상세 정보 -->
+        <div id="searchResultDetails" class="row mb-5" style="display: none;">
+            <div class="col-md-6 mx-auto">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title" id="resultStockName"></h5>
+                        <p class="card-text">
+                            현재가: <span id="resultCurrentPrice"></span>원<br>
+                            내재가치: <span id="resultIntrinsicValue"></span>원<br>
+                            안전마진: <span id="resultSafetyMargin"></span>%<br>
+                            자사주비율: <span id="resultTreasuryRatio"></span>%
+                        </p>
+                        <h6 class="mt-4">과거 재무제표</h6>
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>기간</th>
+                                        <th>PBR</th>
+                                        <th>EPS</th>
+                                        <th>BPS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="financialDataTable">
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">안전마진</h5>
-                    <p class="card-text" id="safetyMargin"></p>
-                </div>
-            </div>
+        </div>
 
-            <div class="card mb-3">
-                <div class="card-body">
-                    <h5 class="card-title">자기주식 정보</h5>
-                    <p class="card-text" id="treasuryStock"></p>
-                </div>
+        <!-- 상위 종목 섹션 -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0">안전마진 상위 종목 Top 30</h2>
+            <div class="last-update">
+                마지막 업데이트: {{ last_update }}
             </div>
-
-            <div class="card">
-                <div class="card-body">
-                    <h5 class="card-title">과거 재무지표</h5>
-                    <div class="table-responsive">
-                        <table class="table">
-                            <thead>
-                                <tr>
-                                    <th>기간</th>
-                                    <th>PBR</th>
-                                    <th>EPS</th>
-                                    <th>BPS</th>
-                                </tr>
-                            </thead>
-                            <tbody id="financialData"></tbody>
-                        </table>
+        </div>
+        <div class="row">
+            {% for stock in top_stocks %}
+            <div class="col-md-4 mb-4">
+                <div class="card stock-card" onclick="toggleDetails('{{ stock.code }}')">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            <span class="badge bg-primary me-2">{{ loop.index }}위</span>
+                            {{ stock.name }} ({{ stock.code }})
+                        </h5>
+                        <div id="details-{{ stock.code }}" class="stock-details">
+                            <p class="card-text">
+                                현재가: {{ "{:,}".format(stock.current_price|int) }}원<br>
+                                내재가치: {{ "{:,}".format(stock.intrinsic_value|int) }}원<br>
+                                안전마진: 
+                                <span class="{% if stock.safety_margin > 0 %}safety-margin-positive{% else %}safety-margin-negative{% endif %}">
+                                    {{ "%.1f"|format(stock.safety_margin) }}%
+                                </span>
+                                {% if stock.treasury_ratio > 0 %}
+                                <br>자사주비율: {{ "%.1f"|format(stock.treasury_ratio) }}%
+                                {% endif %}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
+            {% endfor %}
         </div>
     </div>
 
     <script>
-        function searchCompany() {
-            const companyName = document.getElementById('companyName').value;
-            if (!companyName) {
-                showError('종목명을 입력해주세요.');
-                return;
-            }
-
-            document.querySelector('.loading').style.display = 'block';
-            document.querySelector('.error-message').style.display = 'none';
-            document.getElementById('searchResults').innerHTML = '';
-
-            fetch('/search', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `company_name=${encodeURIComponent(companyName)}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.querySelector('.loading').style.display = 'none';
-                if (data.error) {
-                    showError(data.error);
-                } else {
-                    const resultsDiv = document.getElementById('searchResults');
-                    data.results.forEach(result => {
-                        const div = document.createElement('div');
-                        div.className = 'search-result-item';
-                        div.textContent = `${result.name} (${result.code})`;
-                        div.onclick = () => {
-                            document.getElementById('ticker').value = result.code;
-                            document.getElementById('companyName').value = result.name;
-                            resultsDiv.innerHTML = '';
-                            calculateValue(new Event('submit'));
-                        };
-                        resultsDiv.appendChild(div);
-                    });
-                }
-            })
-            .catch(error => {
-                document.querySelector('.loading').style.display = 'none';
-                showError('검색 중 오류가 발생했습니다.');
-            });
-        }
-
-        function calculateValue(event) {
-            event.preventDefault();
-            const ticker = document.getElementById('ticker').value;
-            
-            document.querySelector('.loading').style.display = 'block';
-            document.querySelector('.error-message').style.display = 'none';
-            document.querySelector('.result-section').style.display = 'none';
-
-            fetch('/calculate', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `ticker=${ticker}`
-            })
-            .then(response => response.json())
-            .then(data => {
-                document.querySelector('.loading').style.display = 'none';
-                if (data.error) {
-                    showError(data.error);
-                } else {
-                    displayResults(data);
-                }
-            })
-            .catch(error => {
-                document.querySelector('.loading').style.display = 'none';
-                showError('계산 중 오류가 발생했습니다.');
-            });
-        }
-
-        function displayResults(data) {
-            document.querySelector('.result-section').style.display = 'block';
-            document.getElementById('stockName').textContent = data.stock_name;
-            document.getElementById('currentPrice').textContent = formatNumber(data.current_price) + '원';
-            document.getElementById('intrinsicValue').textContent = formatNumber(data.intrinsic_value) + '원';
-            
-            const safetyMargin = document.getElementById('safetyMargin');
-            safetyMargin.textContent = data.safety_margin.toFixed(2) + '%';
-            safetyMargin.className = 'safety-margin ' + (data.safety_margin >= 0 ? 'positive' : 'negative');
-            
-            const treasuryStock = document.getElementById('treasuryStock');
-            if (data.treasury_stock.ratio > 0) {
-                treasuryStock.textContent = `보유주식수: ${formatNumber(data.treasury_stock.shares)}주 (${data.treasury_stock.ratio.toFixed(2)}%)`;
+        function toggleDetails(code) {
+            const details = document.getElementById(`details-${code}`);
+            if (details.style.display === 'none' || details.style.display === '') {
+                details.style.display = 'block';
             } else {
-                treasuryStock.textContent = '자기주식 없음';
+                details.style.display = 'none';
             }
-
-            const tbody = document.getElementById('financialData');
-            tbody.innerHTML = '';
-            data.financial_data.forEach(row => {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${row.period}</td>
-                    <td>${formatNumber(row.PBR)}</td>
-                    <td>${formatNumber(row.EPS)}</td>
-                    <td>${formatNumber(row.BPS)}</td>
-                `;
-                tbody.appendChild(tr);
-            });
         }
 
-        function showError(message) {
-            const errorDiv = document.querySelector('.error-message');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
+        function searchStock() {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+
+            // 검색 시작 시 상세 정보 숨기기
+            document.getElementById('searchResultDetails').style.display = 'none';
+
+            fetch(`/search?query=${encodeURIComponent(query)}`)
+                .then(response => response.json())
+                .then(data => {
+                    const resultsDiv = document.getElementById('searchResults');
+                    resultsDiv.innerHTML = '';
+                    
+                    data.forEach(stock => {
+                        const item = document.createElement('a');
+                        item.href = '#';
+                        item.className = 'list-group-item list-group-item-action';
+                        item.textContent = `${stock.name} (${stock.code})`;
+                        item.onclick = (e) => {
+                            e.preventDefault();
+                            analyzeStock(stock.code);
+                            // 검색 결과 리스트 숨기기
+                            resultsDiv.style.display = 'none';
+                            // 검색어 입력창 비우기
+                            document.getElementById('searchInput').value = '';
+                        };
+                        resultsDiv.appendChild(item);
+                    });
+                    // 검색 결과가 있으면 리스트 표시
+                    resultsDiv.style.display = data.length > 0 ? 'block' : 'none';
+                })
+                .catch(error => console.error('Error:', error));
         }
 
-        function formatNumber(num) {
-            return new Intl.NumberFormat('ko-KR').format(num);
+        function analyzeStock(code) {
+            fetch(`/analyze?code=${code}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+                    
+                    // 검색 결과 상세 정보 표시
+                    const detailsDiv = document.getElementById('searchResultDetails');
+                    document.getElementById('resultStockName').textContent = `${data.stock_name} (${code})`;
+                    document.getElementById('resultCurrentPrice').textContent = data.current_price.toLocaleString();
+                    document.getElementById('resultIntrinsicValue').textContent = data.intrinsic_value.toLocaleString();
+                    document.getElementById('resultSafetyMargin').textContent = data.safety_margin.toFixed(1);
+                    document.getElementById('resultTreasuryRatio').textContent = data.treasury_ratio ? data.treasury_ratio.toFixed(1) + '%' : '정보 없음';
+                    
+                    // 안전마진 색상 설정
+                    const safetyMarginSpan = document.getElementById('resultSafetyMargin');
+                    safetyMarginSpan.className = data.safety_margin > 0 ? 'safety-margin-positive' : 'safety-margin-negative';
+                    
+                    // 과거 재무제표 데이터 표시
+                    const tableBody = document.getElementById('financialDataTable');
+                    tableBody.innerHTML = '';
+                    if (data.historical_data) {
+                        data.historical_data.forEach(item => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${item.period}</td>
+                                <td>${item.PBR.toFixed(2)}</td>
+                                <td>${item.EPS.toLocaleString()}</td>
+                                <td>${item.BPS.toLocaleString()}</td>
+                            `;
+                            tableBody.appendChild(row);
+                        });
+                    }
+                    
+                    // 상세 정보 표시
+                    detailsDiv.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('데이터를 가져오는 중 오류가 발생했습니다.');
+                });
         }
+
+        // Enter 키로 검색
+        document.getElementById('searchInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchStock();
+            }
+        });
+
+        // 검색어 입력 시 검색 결과 리스트 표시
+        document.getElementById('searchInput').addEventListener('input', function(e) {
+            const resultsDiv = document.getElementById('searchResults');
+            if (e.target.value === '') {
+                resultsDiv.style.display = 'none';
+                // 검색어가 비어있을 때 상세 정보도 숨기기
+                document.getElementById('searchResultDetails').style.display = 'none';
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // 툴팁 초기화
+            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                return new bootstrap.Tooltip(tooltipTriggerEl, {
+                    html: true
+                })
+            })
+        });
     </script>
 </body>
 </html> 
