@@ -3,5 +3,5 @@ requests==2.26.0
 lxml==4.9.1
 numpy==1.24.3
 pandas==1.5.3
-FinanceDataReader==0.9.50
+git+https://github.com/financedata-org/FinanceDataReader.git@v0.9.50
 gunicorn==20.1.0 
