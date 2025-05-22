@@ -13,79 +13,78 @@ except Exception as e:
     print(f"KRX 종목 목록 로드 중 오류 발생: {str(e)}")
     KRX_STOCKS = None
 
-def get_historical_metrics(ticker: str) -> pd.DataFrame:
+def get_stock_data(ticker: str) -> tuple:
     """
-    네이버 금융 메인 페이지에서
-    3년 전·2년 전·직전년도 PBR·EPS·BPS를
-    고정 XPath로 추출합니다.
+    주식 데이터를 한 번의 API 호출로 가져옵니다.
+    현재가와 재무제표 데이터를 포함합니다.
     """
-    url = f"https://finance.naver.com/item/main.naver?code={ticker}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()
+    cached_data = stock_cache.get(f"stock_data_{ticker}")
+    if cached_data is not None:
+        return cached_data
 
-    doc = html.fromstring(resp.text)
-    
-    # 종목명 추출
-    stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
-    stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
-    
-    # 현재가 추출
-    current_price_node = doc.xpath('//*[@id="content"]/div[6]/table/tbody/tr[1]/td[1]')
-    current_price = None
-    if current_price_node:
-        try:
-            current_price = float(current_price_node[0].text_content().strip().replace(',', ''))
-        except ValueError:
-            current_price = None
+    try:
+        # 메인 페이지에서 재무제표 데이터 가져오기
+        url = f"https://finance.naver.com/item/main.naver?code={ticker}"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        doc = html.fromstring(resp.text)
+        
+        # 종목명 추출
+        stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
+        stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
+        
+        # 현재가 추출 (XPath 수정)
+        current_price_node = doc.xpath('//*[@id="chart_area"]/div[1]/div/dl/dd[1]/span[1]')
+        current_price = None
+        if current_price_node:
+            try:
+                price_text = current_price_node[0].text_content().strip().replace(',', '')
+                current_price = float(price_text)
+            except ValueError:
+                pass
 
-    # 자사주 정보 추출
-    treasury_stock_info = get_treasury_stock_info(ticker)
-    
-    # 기간 레이블
-    periods = ["3년전", "2년전", "직전년도"]
+        # 재무지표 XPath
+        xpaths = {
+            'PBR': [
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[1]',
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[2]',
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[3]',
+            ],
+            'EPS': [
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[1]',
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[2]',
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[3]',
+            ],
+            'BPS': [
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[1]',
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[2]',
+                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[3]',
+            ]
+        }
 
-    # 고정 XPath 목록 (td[1], td[2], td[3] 순서)
-    pbr_xps = [
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[1]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[2]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[3]',
-    ]
-    eps_xps = [
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[1]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[2]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[3]',
-    ]
-    bps_xps = [
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[1]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[2]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[3]',
-    ]
+        def extract(xpath: str):
+            node = doc.xpath(xpath)
+            if not node:
+                return None
+            txt = node[0].text_content().strip().replace(",", "").replace("−", "-")
+            try:
+                return float(txt) if '.' in txt else int(txt)
+            except ValueError:
+                return None
 
-    def extract(xpath: str):
-        node = doc.xpath(xpath)
-        if not node:
-            return None
-        txt = node[0].text_content().strip().replace(",", "").replace("−", "-")
-        try:
-            # 소수점이 있는 경우 float로, 없는 경우 int로 변환
-            if '.' in txt:
-                return float(txt)
-            else:
-                return int(txt)
-        except ValueError:
-            return None
+        # 데이터 추출
+        data = {key: [extract(xp) for xp in xps] for key, xps in xpaths.items()}
+        periods = ["3년전", "2년전", "직전년도"]
+        df = pd.DataFrame(data, index=periods)
 
-    # 값 추출
-    data = {"PBR": [], "EPS": [], "BPS": []}
-    for xp_pbr, xp_eps, xp_bps in zip(pbr_xps, eps_xps, bps_xps):
-        data["PBR"].append(extract(xp_pbr))
-        data["EPS"].append(extract(xp_eps))
-        data["BPS"].append(extract(xp_bps))
+        result = (df, stock_name, current_price)
+        stock_cache.set(f"stock_data_{ticker}", result)
+        return result
 
-    # DataFrame 생성
-    df = pd.DataFrame(data, index=periods)
-    return df, stock_name, current_price, treasury_stock_info
+    except Exception as e:
+        print(f"주식 데이터 조회 중 오류 발생: {e}")
+        return pd.DataFrame(), "Unknown", None
 
 import requests
 import pandas as pd
@@ -204,15 +203,94 @@ def search_stock_codes(company_name: str) -> list:
         print(f"검색 중 오류 발생: {str(e)}")
         return []
 
+def get_historical_metrics(ticker: str) -> pd.DataFrame:
+    """
+    네이버 금융 메인 페이지에서
+    3년 전·2년 전·직전년도 PBR·EPS·BPS를
+    고정 XPath로 추출합니다.
+    """
+    url = f"https://finance.naver.com/item/main.naver?code={ticker}"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    resp = requests.get(url, headers=headers)
+    resp.raise_for_status()
+    
+    doc = html.fromstring(resp.text)
+    
+    # 종목명 추출
+    stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
+    stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
+    
+    # 현재가 추출 (시세 페이지에서 가져오기)
+    current_price = None
+    try:
+        price_url = f"https://finance.naver.com/item/sise.naver?code={ticker}"
+        price_resp = requests.get(price_url, headers=headers)
+        price_resp.raise_for_status()
+        price_doc = html.fromstring(price_resp.text)
+        current_price_node = price_doc.xpath('//*[@id="_nowVal"]')
+        if current_price_node:
+            current_price = float(current_price_node[0].text_content().strip().replace(',', ''))
+    except Exception as e:
+        print(f"현재가 조회 중 오류 발생: {e}")
+
+    # 자사주 정보 추출
+    treasury_stock_info = get_treasury_stock_info(ticker)
+    
+    # 기간 레이블
+    periods = ["3년전", "2년전", "직전년도"]
+
+    # 고정 XPath 목록 (td[1], td[2], td[3] 순서)
+    pbr_xps = [
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[1]',
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[2]',
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[3]',
+    ]
+    eps_xps = [
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[1]',
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[2]',
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[3]',
+    ]
+    bps_xps = [
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[1]',
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[2]',
+        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[3]',
+    ]
+
+    def extract(xpath: str):
+        node = doc.xpath(xpath)
+        if not node:
+            return None
+        txt = node[0].text_content().strip().replace(",", "").replace("−", "-")
+        try:
+            # 소수점이 있는 경우 float로, 없는 경우 int로 변환
+            if '.' in txt:
+                return float(txt)
+            else:
+                return int(txt)
+        except ValueError:
+            return None
+
+    # 값 추출
+    data = {"PBR": [], "EPS": [], "BPS": []}
+    for xp_pbr, xp_eps, xp_bps in zip(pbr_xps, eps_xps, bps_xps):
+        data["PBR"].append(extract(xp_pbr))
+        data["EPS"].append(extract(xp_eps))
+        data["BPS"].append(extract(xp_bps))
+
+    # DataFrame 생성
+    df = pd.DataFrame(data, index=periods)
+    return df, stock_name, current_price, treasury_stock_info
+
 if __name__ == "__main__":
     ticker = "006125"  # 예: 영원무역홀딩스
-    df, stock_name, current_price, treasury_stock = get_historical_metrics(ticker)
+    df, stock_name, current_price = get_stock_data(ticker)
     print(f"\n종목명: {stock_name}")
     if current_price:
         print(f"현재가: {current_price:,.0f}원")
     print("\n과거 재무지표:")
     print(df)
     
+    treasury_stock = get_treasury_stock_info(ticker)
     if treasury_stock:
         print("\n자사주 정보:")
         if treasury_stock['shares']:
