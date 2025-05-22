@@ -55,10 +55,6 @@ def get_stock_data(ticker: str) -> tuple:
     주식 데이터를 한 번의 API 호출로 가져옵니다.
     현재가와 재무제표 데이터를 포함합니다.
     """
-    cached_data = stock_cache.get(f"stock_data_{ticker}")
-    if cached_data is not None:
-        return cached_data
-
     try:
         # 메인 페이지에서 재무제표 데이터 가져오기
         url = f"https://finance.naver.com/item/main.naver?code={ticker}"
@@ -71,13 +67,12 @@ def get_stock_data(ticker: str) -> tuple:
         stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
         stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
         
-        # 현재가 추출 (XPath 수정)
-        current_price_node = doc.xpath('//*[@id="chart_area"]/div[1]/div/dl/dd[1]/span[1]')
+        # 현재가 추출
+        current_price_node = doc.xpath('//*[@id="content"]/div[6]/table/tbody/tr[1]/td[1]')
         current_price = None
         if current_price_node:
             try:
-                price_text = current_price_node[0].text_content().strip().replace(',', '')
-                current_price = float(price_text)
+                current_price = float(current_price_node[0].text_content().strip().replace(',', ''))
             except ValueError:
                 pass
 
@@ -115,9 +110,7 @@ def get_stock_data(ticker: str) -> tuple:
         periods = ["3년전", "2년전", "직전년도"]
         df = pd.DataFrame(data, index=periods)
 
-        result = (df, stock_name, current_price)
-        stock_cache.set(f"stock_data_{ticker}", result)
-        return result
+        return df, stock_name, current_price
 
     except Exception as e:
         print(f"주식 데이터 조회 중 오류 발생: {e}")
@@ -125,54 +118,49 @@ def get_stock_data(ticker: str) -> tuple:
 
 
 def get_treasury_stock_info(ticker: str) -> dict:
-    """
-    Wisereport AJAX(c1010001)로부터 '자사주' 보유 주식수와 지분율을 파싱해 반환합니다.
-    
-    :param ticker: 종목코드 (예: '009970')
-    :return: {'shares': int, 'ratio': float}
-    """
-    # 1) AJAX 엔드포인트 (c1010001) 호출
-    url = (
-        "https://navercomp.wisereport.co.kr"
-        f"/v2/company/c1010001.aspx?cmp_cd={ticker}"
-    )
-    headers = {
-        'Referer': 'https://finance.naver.com',
-        'User-Agent': 'Mozilla/5.0'
-    }
-    resp = requests.get(url, headers=headers)
-    resp.raise_for_status()  # :contentReference[oaicite:0]{index=0}
-
-    # 2) HTML → StringIO → pandas.read_html
-    html_buf = StringIO(resp.text)
-    dfs = pd.read_html(html_buf, encoding='utf-8')  # :contentReference[oaicite:1]{index=1}
-
-    # 3) '자사주'가 포함된 테이블 찾기
-    df_target = None
-    for df in dfs:
-        # 첫 번째 컬럼에 '자사주' 텍스트가 있는지 검사
-        first_col = df.columns[0]
-        if df[first_col].astype(str).str.contains('자사주', na=False).any():
-            df_target = df
-            break
-    if df_target is None:
+    """자사주 정보 조회"""
+    try:
+        url = f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={ticker}"
+        headers = {
+            'Referer': 'https://finance.naver.com',
+            'User-Agent': 'Mozilla/5.0'
+        }
+        resp = requests.get(url, headers=headers, timeout=5)
+        resp.raise_for_status()
+        
+        doc = html.fromstring(resp.text)
+        
+        # 자사주 행 찾기
+        treasury_rows = doc.xpath("//tr[contains(., '자사주')]")
+        if not treasury_rows:
+            return {'shares': 0, 'ratio': 0}
+            
+        # 자사주 행에서 주식수와 지분율 추출
+        shares_node = treasury_rows[0].xpath(".//td[2]")  # 주식수는 두 번째 열
+        ratio_node = treasury_rows[0].xpath(".//td[3]")   # 지분율은 세 번째 열
+        
+        shares = 0
+        ratio = 0
+        
+        if shares_node:
+            shares_text = shares_node[0].text_content().strip().replace(',', '')
+            try:
+                shares = float(shares_text)
+            except ValueError:
+                pass
+                
+        if ratio_node:
+            ratio_text = ratio_node[0].text_content().strip().replace('%', '').replace(',', '')
+            try:
+                ratio = float(ratio_text)
+            except ValueError:
+                pass
+        
+        return {'shares': shares, 'ratio': ratio}
+        
+    except Exception as e:
+        print(f"자사주 정보 조회 중 오류 발생: {e}")
         return {'shares': 0, 'ratio': 0}
-
-    # 4) 필요한 3개 컬럼만 슬라이스
-    df3 = df_target.iloc[:, :3]
-    col0, col1, col2 = df3.columns
-
-    # 5) '자사주' 행 추출
-    row = df3[df3[col0].astype(str).str.contains('자사주', na=False)].iloc[0]
-
-    # 6) 문자열 정제 및 숫자 변환
-    shares_text = str(row[col1]).replace(',', '').strip()
-    ratio_text  = str(row[col2]).replace('%', '').replace(',', '').strip()
-
-    shares = float(shares_text)
-    ratio  = float(ratio_text)
-
-    return {'shares': shares, 'ratio': ratio}
 
 
 def calculate_intrinsic_value(df: pd.DataFrame, treasury_stock_info: dict = None) -> float:
