@@ -4,8 +4,6 @@
 import requests
 from lxml import html
 import pandas as pd
-from pykrx import stock
-from datetime import datetime
 import FinanceDataReader as fdr
 
 # 전역 변수로 KRX 종목 목록 저장
