@@ -382,6 +382,7 @@ def analyze_stock_wrapper(args):
 def analyze_all_stocks(limit: int = 30) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
+    순차 처리 방식으로 변경하여 안정성을 높였습니다.
     """
     if KRX_STOCKS is None:
         return []
@@ -392,18 +393,26 @@ def analyze_all_stocks(limit: int = 30) -> list:
     # 분석할 종목 목록 준비
     stock_list = [(row['Code'], row['Name']) for _, row in KRX_STOCKS.iterrows()]
     
-    # 병렬 처리로 종목 분석
+    # 순차 처리로 종목 분석
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-        # tqdm으로 진행률 표시
-        futures = list(tqdm(
-            executor.map(analyze_stock_wrapper, stock_list),
-            total=len(stock_list),
-            desc="종목 분석 중"
-        ))
-        
-        # 결과 수집
-        results = [r for r in futures if r is not None]
+    for i, (code, name) in enumerate(tqdm(stock_list, desc="종목 분석 중")):
+        try:
+            result = analyze_stock(code)
+            if not result.get('error') and result.get('safety_margin') is not None:
+                results.append({
+                    'code': code,
+                    'name': result['stock_name'],
+                    'current_price': result['current_price'],
+                    'intrinsic_value': result['intrinsic_value'],
+                    'safety_margin': result['safety_margin'],
+                    'treasury_ratio': result['treasury_ratio']
+                })
+                # 진행 상황 출력 (100개 종목마다)
+                if (i + 1) % 100 == 0:
+                    print(f"\n{i + 1}/{total_stocks} 종목 분석 완료")
+                    print(f"현재까지 {len(results)}개 종목 분석 성공")
+        except Exception as e:
+            print(f"\n종목 {code} ({name}) 분석 중 오류 발생: {e}")
     
     # 안전마진 기준으로 정렬하고 상위 종목만 선택
     results.sort(key=lambda x: x['safety_margin'], reverse=True)
