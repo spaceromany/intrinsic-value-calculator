@@ -5,13 +5,50 @@ import requests
 from lxml import html
 import pandas as pd
 import FinanceDataReader as fdr
+import requests
+import pandas as pd
+from io import StringIO
+from datetime import datetime, timedelta
+import json
+import os
 
-# 전역 변수로 KRX 종목 목록 저장
-try:
-    KRX_STOCKS = fdr.StockListing('KRX')
-except Exception as e:
-    print(f"KRX 종목 목록 로드 중 오류 발생: {str(e)}")
-    KRX_STOCKS = None
+# KRX 종목 목록 파일 경로
+KRX_STOCKS_FILE = 'krx_stocks.json'
+KRX_STOCKS = None
+
+def load_krx_stocks():
+    """KRX 종목 목록을 파일에서 로드하거나 업데이트"""
+    global KRX_STOCKS
+    
+    # 파일이 존재하는지 확인
+    if os.path.exists(KRX_STOCKS_FILE):
+        # 파일의 수정 시간 확인
+        file_time = datetime.fromtimestamp(os.path.getmtime(KRX_STOCKS_FILE))
+        now = datetime.now()
+        
+        # 하루가 지났는지 확인
+        if now - file_time < timedelta(days=1):
+            # 하루가 지나지 않았다면 파일에서 로드
+            try:
+                with open(KRX_STOCKS_FILE, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    KRX_STOCKS = pd.DataFrame(data)
+                return
+            except Exception as e:
+                print(f"KRX 종목 목록 파일 로드 중 오류 발생: {e}")
+    
+    # 파일이 없거나 하루가 지났다면 새로 다운로드
+    try:
+        KRX_STOCKS = fdr.StockListing('KRX')
+        # DataFrame을 JSON으로 저장
+        with open(KRX_STOCKS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(KRX_STOCKS.to_dict('records'), f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"KRX 종목 목록 다운로드 중 오류 발생: {e}")
+        KRX_STOCKS = None
+
+# 프로그램 시작 시 KRX 종목 목록 로드
+load_krx_stocks()
 
 def get_stock_data(ticker: str) -> tuple:
     """
@@ -86,9 +123,6 @@ def get_stock_data(ticker: str) -> tuple:
         print(f"주식 데이터 조회 중 오류 발생: {e}")
         return pd.DataFrame(), "Unknown", None
 
-import requests
-import pandas as pd
-from io import StringIO
 
 def get_treasury_stock_info(ticker: str) -> dict:
     """
