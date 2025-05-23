@@ -64,13 +64,18 @@
             max-height: 300px;
             overflow-y: auto;
             width: 100%;
-            display: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
-        .search-results .list-group-item {
+        .search-result-item {
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
             cursor: pointer;
         }
-        .search-results .list-group-item:hover {
+        .search-result-item:hover {
             background-color: #f8f9fa;
+        }
+        .search-result-item:last-child {
+            border-bottom: none;
         }
         .tooltip-inner {
             max-width: 300px;
@@ -81,6 +86,16 @@
 </head>
 <body>
     <div class="container py-5">
+        <!-- 로딩 인디케이터 -->
+        <div id="loadingIndicator" class="position-fixed top-50 start-50 translate-middle" style="display: none; z-index: 1000;">
+            <div class="d-flex flex-column align-items-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <div class="mt-2" id="loadingText">데이터를 불러오는 중...</div>
+            </div>
+        </div>
+
         <h1 class="text-center mb-5">
             내재가치 계산기
             <i class="bi bi-info-circle" 
@@ -103,12 +118,12 @@
         
         <!-- 종목 검색 섹션 -->
         <div class="row justify-content-center mb-5">
-            <div class="col-md-6">
+            <div class="col-md-6 position-relative">
                 <div class="input-group">
                     <input type="text" id="searchInput" class="form-control" placeholder="종목명을 입력하세요">
                     <button class="btn btn-primary" onclick="searchStock()">검색</button>
                 </div>
-                <div id="searchResults" class="list-group mt-2"></div>
+                <div id="searchResults" class="search-results mt-2"></div>
             </div>
         </div>
 
@@ -190,44 +205,66 @@
             }
         }
 
+        // 로딩 인디케이터 표시 함수
+        function showLoading(text = '데이터를 불러오는 중...') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingIndicator').style.display = 'block';
+        }
+
+        // 로딩 인디케이터 숨김 함수
+        function hideLoading() {
+            document.getElementById('loadingIndicator').style.display = 'none';
+        }
+
+        // 검색 함수 수정
         function searchStock() {
-            const query = document.getElementById('searchInput').value;
+            const query = document.getElementById('searchInput').value.trim();
             if (!query) return;
-
-            // 검색 시작 시 상세 정보 숨기기
-            document.getElementById('searchResultDetails').style.display = 'none';
-
+            
+            showLoading('종목을 검색하는 중...');
+            
             fetch(`/search?query=${encodeURIComponent(query)}`)
                 .then(response => response.json())
                 .then(data => {
+                    hideLoading();
                     const resultsDiv = document.getElementById('searchResults');
                     resultsDiv.innerHTML = '';
                     
+                    if (data.length === 0) {
+                        resultsDiv.innerHTML = '<div class="search-result-item text-center">검색 결과가 없습니다.</div>';
+                        resultsDiv.style.display = 'block';
+                        return;
+                    }
+                    
                     data.forEach(stock => {
-                        const item = document.createElement('a');
-                        item.href = '#';
-                        item.className = 'list-group-item list-group-item-action';
-                        item.textContent = `${stock.name} (${stock.code})`;
-                        item.onclick = (e) => {
-                            e.preventDefault();
+                        const div = document.createElement('div');
+                        div.className = 'search-result-item';
+                        div.textContent = `${stock.name} (${stock.code})`;
+                        div.onclick = () => {
                             analyzeStock(stock.code);
-                            // 검색 결과 리스트 숨기기
                             resultsDiv.style.display = 'none';
-                            // 검색어 입력창 비우기
                             document.getElementById('searchInput').value = '';
                         };
-                        resultsDiv.appendChild(item);
+                        resultsDiv.appendChild(div);
                     });
-                    // 검색 결과가 있으면 리스트 표시
-                    resultsDiv.style.display = data.length > 0 ? 'block' : 'none';
+                    
+                    resultsDiv.style.display = 'block';
                 })
-                .catch(error => console.error('Error:', error));
+                .catch(error => {
+                    hideLoading();
+                    alert('검색 중 오류가 발생했습니다.');
+                    console.error('Error:', error);
+                });
         }
 
+        // 종목 분석 함수 수정
         function analyzeStock(code) {
+            showLoading('종목을 분석하는 중...');
+            
             fetch(`/analyze?code=${code}`)
                 .then(response => response.json())
                 .then(data => {
+                    hideLoading();
                     if (data.error) {
                         alert(data.error);
                         return;
@@ -248,25 +285,26 @@
                     // 과거 재무제표 데이터 표시
                     const tableBody = document.getElementById('financialDataTable');
                     tableBody.innerHTML = '';
+                    
                     if (data.historical_data) {
-                        data.historical_data.forEach(item => {
+                        Object.entries(data.historical_data).forEach(([period, metrics]) => {
                             const row = document.createElement('tr');
                             row.innerHTML = `
-                                <td>${item.period}</td>
-                                <td>${item.PBR.toFixed(2)}</td>
-                                <td>${item.EPS.toLocaleString()}</td>
-                                <td>${item.BPS.toLocaleString()}</td>
+                                <td>${period}</td>
+                                <td>${metrics.PBR?.toFixed(2) || 'N/A'}</td>
+                                <td>${metrics.EPS?.toLocaleString() || 'N/A'}</td>
+                                <td>${metrics.BPS?.toLocaleString() || 'N/A'}</td>
                             `;
                             tableBody.appendChild(row);
                         });
                     }
                     
-                    // 상세 정보 표시
                     detailsDiv.style.display = 'block';
                 })
                 .catch(error => {
+                    hideLoading();
+                    alert('분석 중 오류가 발생했습니다.');
                     console.error('Error:', error);
-                    alert('데이터를 가져오는 중 오류가 발생했습니다.');
                 });
         }
 
@@ -282,8 +320,17 @@
             const resultsDiv = document.getElementById('searchResults');
             if (e.target.value === '') {
                 resultsDiv.style.display = 'none';
-                // 검색어가 비어있을 때 상세 정보도 숨기기
+                resultsDiv.innerHTML = '';
                 document.getElementById('searchResultDetails').style.display = 'none';
+            }
+        });
+
+        // 검색 결과 외부 클릭 시 리스트 숨기기
+        document.addEventListener('click', function(e) {
+            const searchResults = document.getElementById('searchResults');
+            const searchInput = document.getElementById('searchInput');
+            if (!searchResults.contains(e.target) && e.target !== searchInput) {
+                searchResults.style.display = 'none';
             }
         });
 
