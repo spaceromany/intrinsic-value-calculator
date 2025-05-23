@@ -25,29 +25,42 @@ def background_update():
 
 @app.route('/')
 def index():
+    return render_template('index.html')
+
+@app.route('/top-stocks')
+def top_stocks():
     try:
-        # JSON 파일에서 데이터 읽기
         with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-            results = json.load(f)
-        top_stocks = results[:30]  # 상위 30개만 선택
+            data = json.load(f)
         
-        # 마지막 업데이트 시간
-        last_update = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json')).strftime("%Y-%m-%d %H:%M")
+        # 안전마진 기준으로 정렬
+        sorted_data = sorted(data, key=lambda x: float(x['safety_margin']) if x['safety_margin'] is not None else float('-inf'), reverse=True)
         
-        return render_template('index.html', top_stocks=top_stocks, last_update=last_update)
+        # 상위 30개만 선택
+        top_stocks = sorted_data[:30]
         
+        # 마지막 업데이트 시간 가져오기
+        last_update = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json')).strftime('%Y-%m-%d %H:%M:%S')
+        
+        return render_template('calculator.html', top_stocks=top_stocks, last_update=last_update)
     except Exception as e:
-        print(f"데이터 로드 중 오류 발생: {str(e)}")
-        return render_template('index.html', top_stocks=[], last_update="오류 발생")
+        return render_template('calculator.html', error=str(e))
 
 @app.route('/search')
-def search(): 
-    query = request.args.get('query', '')
+def search():
+    query = request.args.get('query', '').strip()
     if not query:
         return jsonify([])
     
-    results = search_stock_codes(query)
-    return jsonify(results)
+    try:
+        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # 종목명으로 검색
+        results = [stock for stock in data if query.lower() in stock['name'].lower()]
+        return jsonify(results[:10])  # 최대 10개 결과만 반환
+    except Exception as e:
+        return jsonify({'error': str(e)})
 
 @app.route('/analyze')
 def analyze():
@@ -83,70 +96,40 @@ def analyze():
     except Exception as e:
         return jsonify({'error': f'오류가 발생했습니다: {str(e)}'})
 
-@app.route('/calculate', methods=['POST'])
-def calculate():
-    ticker = request.form.get('ticker')
-    if not ticker:
-        return jsonify({'error': '종목코드를 입력해주세요.'})
-    
+@app.route('/filter')
+def filter_stocks():
+    limit = request.args.get('limit', default=30, type=int)
     try:
-        # 재무 데이터 가져오기
-        df, stock_name, current_price, treasury_stock = get_historical_metrics(ticker)
+        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
         
-        if df.empty:
-            return jsonify({'error': '재무 데이터를 가져올 수 없습니다.'})
+        # 안전마진 기준으로 정렬
+        sorted_data = sorted(data, key=lambda x: float(x['safety_margin']) if x['safety_margin'] is not None else float('-inf'), reverse=True)
         
-        # 내재가치 계산
-        intrinsic_value = calculate_intrinsic_value(df, treasury_stock)
-        if intrinsic_value is None:
-            return jsonify({'error': '내재가치를 계산할 수 없습니다.'})
+        # 상위 N개 선택
+        filtered_data = sorted_data[:limit]
         
-        # 안전마진 계산
-        safety_margin = None
-        if current_price and intrinsic_value:
-            safety_margin = ((intrinsic_value - current_price) / current_price) * 100
-        
-        # 재무지표 데이터 포맷팅
-        df = df.reset_index().rename(columns={'index': 'period'})  # 인덱스를 컬럼으로 변환
-        financial_data = []
-        for _, row in df.iterrows():
-            financial_data.append({
-                'period': row['period'],
-                'PBR': row['PBR'],
-                'EPS': row['EPS'],
-                'BPS': row['BPS']
-            })
-        
-        return jsonify({
-            'stock_name': stock_name,
-            'current_price': current_price,
-            'intrinsic_value': intrinsic_value,
-            'safety_margin': safety_margin,
-            'treasury_stock': treasury_stock,
-            'financial_data': financial_data
-        })
-        
+        return jsonify(filtered_data)
     except Exception as e:
-        return jsonify({'error': f'오류가 발생했습니다: {str(e)}'})
+        return jsonify({'error': str(e)})
 
 @app.route('/export_excel')
 def export_excel():
     try:
-        # 필터 파라미터 가져오기
-        limit = int(request.args.get('limit', 30))  # 기본값 30
+        limit = request.args.get('limit', default=30, type=int)
         
-        # JSON 파일에서 데이터 읽기
+        # JSON 파일 읽기
         with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-            results = json.load(f)
+            data = json.load(f)
         
         # 안전마진 기준으로 정렬
-        results.sort(key=lambda x: x['safety_margin'] if not pd.isna(x['safety_margin']) else float('-inf'), reverse=True)
+        sorted_data = sorted(data, key=lambda x: float(x['safety_margin']) if x['safety_margin'] is not None else float('-inf'), reverse=True)
         
         # 상위 N개 선택
-        filtered_results = results[:limit]
+        filtered_data = sorted_data[:limit]
         
         # DataFrame 생성
-        df = pd.DataFrame(filtered_results)
+        df = pd.DataFrame(filtered_data)
         
         # 컬럼명 한글로 변경
         df = df.rename(columns={
@@ -162,62 +145,27 @@ def export_excel():
         # 숫자 포맷팅
         df['현재가'] = df['현재가'].apply(lambda x: f"{x:,.0f}")
         df['내재가치'] = df['내재가치'].apply(lambda x: f"{x:,.0f}")
-        df['안전마진'] = df['안전마진'].apply(lambda x: f"{x:+.1f}%")
-        df['자사주비율'] = df['자사주비율'].apply(lambda x: f"{x:.1f}%")
-        if '시가총액' in df.columns:
-            df['시가총액'] = df['시가총액'].apply(lambda x: f"{x:,.0f}")
+        df['안전마진'] = df['안전마진'].apply(lambda x: f"{x:.1f}%")
+        df['자사주비율'] = df['자사주비율'].apply(lambda x: f"{x:.1f}%" if x is not None else 'N/A')
+        df['시가총액'] = df['시가총액'].apply(lambda x: f"{x:,.0f}" if x is not None else 'N/A')
         
-        # 엑셀 파일 생성
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, sheet_name='안전마진 분석', index=False)
+        # Excel 파일 생성
+        filename = f'safety_margin_top_{limit}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.xlsx'
+        with pd.ExcelWriter(filename, engine='openpyxl') as writer:
+            df.to_excel(writer, index=False, sheet_name='안전마진 상위 종목')
             
-            # 워크시트 가져오기
-            worksheet = writer.sheets['안전마진 분석']
-            
-            # 컬럼 너비 조정
+            # 열 너비 자동 조정
+            worksheet = writer.sheets['안전마진 상위 종목']
             for idx, col in enumerate(df.columns):
-                max_length = max(df[col].astype(str).apply(len).max(), len(col)) + 2
-                worksheet.set_column(idx, idx, max_length)
+                max_length = max(
+                    df[col].astype(str).apply(len).max(),
+                    len(col)
+                )
+                worksheet.column_dimensions[chr(65 + idx)].width = max_length + 2
         
-        output.seek(0)
-        
-        # 파일명 생성
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"안전마진분석_Top{limit}_{timestamp}.xlsx"
-        
-        return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name=filename
-        )
-        
+        return send_file(filename, as_attachment=True)
     except Exception as e:
-        print(f"엑셀 내보내기 중 오류 발생: {str(e)}")
-        return jsonify({'error': '엑셀 파일 생성 중 오류가 발생했습니다.'}), 500
-
-@app.route('/filter')
-def filter_stocks():
-    try:
-        # 필터 파라미터 가져오기
-        limit = int(request.args.get('limit', 30))  # 기본값 30
-        
-        # JSON 파일에서 데이터 읽기
-        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-            results = json.load(f)
-        
-        # 안전마진 기준으로 정렬
-        results.sort(key=lambda x: x['safety_margin'] if not pd.isna(x['safety_margin']) else float('-inf'), reverse=True)
-        
-        # 상위 N개 선택
-        filtered_results = results[:limit]
-        
-        return jsonify(filtered_results)
-        
-    except Exception as e:
-        print(f"필터링 중 오류 발생: {str(e)}")
-        return jsonify({'error': '데이터 필터링 중 오류가 발생했습니다.'}), 500
+        return jsonify({'error': str(e)})
 
 if __name__ == '__main__':
     # 백그라운드 업데이트 스레드 시작
