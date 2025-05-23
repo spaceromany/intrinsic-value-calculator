@@ -216,7 +216,25 @@
 
         <!-- 계산기 섹션 -->
         <div class="calculator-section">
-            <h2 class="mb-4">내재가치 계산기</h2>
+            <h2 class="mb-4">
+                내재가치 계산기
+                <i class="bi bi-info-circle" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-placement="right" 
+                   data-bs-html="true"
+                   title="<b>내재가치 계산 방법</b><br><br>
+                          <b>1. EPS 가중평균 계산:</b><br>
+                          - 최근년도 EPS × 3<br>
+                          - 전년도 EPS × 2<br>
+                          - 전전년도 EPS × 1<br>
+                          - 가중평균 = (최근년도EPS×3 + 전년도EPS×2 + 전전년도EPS×1) ÷ 6<br><br>
+                          <b>2. 내재가치 계산:</b><br>
+                          - 기본 내재가치 = (EPS 가중평균 × 10 + 최근년도 BPS) ÷ 2<br>
+                          - 자기주식이 있는 경우: 내재가치 = 기본 내재가치 × (100 ÷ (100 - 자기주식비율))<br><br>
+                          <b>3. 안전마진 계산:</b><br>
+                          - 안전마진 = ((내재가치 - 현재가) ÷ 현재가) × 100">
+                </i>
+            </h2>
             <form id="calculatorForm">
                 <div class="mb-3">
                     <label for="stockCode" class="form-label">종목명</label>
