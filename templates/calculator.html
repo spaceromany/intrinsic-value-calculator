@@ -130,55 +130,57 @@
                     <div class="last-update">
                         마지막 업데이트: {{ last_update }}
                     </div>
-                    <button class="btn btn-success" onclick="exportExcel()">
+                    <button class="btn btn-success" onclick="exportToExcel()">
                         <i class="bi bi-file-excel"></i> 엑셀 내보내기
                     </button>
                 </div>
             </div>
-
+            
+            <!-- 배당수익률 필터 섹션 -->
+            <div class="mb-4 p-3 bg-light rounded">
+                <div class="d-flex align-items-center mb-2">
+                    <h6 class="mb-0 me-3">배당수익률 필터:</h6>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary active" data-dividend="" onclick="filterByDividend(null)">전체</button>
+                        <button type="button" class="btn btn-outline-primary" data-dividend="1" onclick="filterByDividend(1)">1% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-dividend="3" onclick="filterByDividend(3)">3% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-dividend="5" onclick="filterByDividend(5)">5% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-dividend="7" onclick="filterByDividend(7)">7% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-dividend="10" onclick="filterByDividend(10)">10% 이상</button>
+                    </div>
+                </div>
+            </div>
+            
             <!-- 종목 리스트 컨테이너 -->
             <div id="stockListContainer">
                 <div class="row g-3">
-                    {% for stock in top_stocks %}
-                    <div class="col-12 col-sm-6 col-md-4">
-                        <div class="card stock-card" onclick="toggleDetails('{{ stock.code }}')">
-                            <div class="card-body">
-                                <h5 class="card-title">
-                                    <span class="badge bg-primary me-2">{{ loop.index }}위</span>
-                                    {{ stock.name }} ({{ stock.code }})
-                                </h5>
-                                <div id="details-{{ stock.code }}" class="stock-details">
-                                    <p class="card-text">
-                                        현재가: {{ "{:,}".format(stock.current_price|int) }}원<br>
-                                        내재가치: {{ "{:,}".format(stock.intrinsic_value|int) }}원<br>
-                                        안전마진: 
-                                        <span class="{% if stock.safety_margin > 0 %}safety-margin-positive{% else %}safety-margin-negative{% endif %}">
-                                            {{ "%.1f"|format(stock.safety_margin) }}%
-                                        </span>
-                                        {% if stock.treasury_ratio > 0 %}
-                                        <br>자사주비율: {{ "%.1f"|format(stock.treasury_ratio) }}%
-                                        {% endif %}
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
+                    <!-- 여기에 종목 카드들이 동적으로 추가됩니다 -->
                 </div>
             </div>
         </div>
     </div>
 
     <script>
-        function toggleDetails(code) {
-            const details = document.getElementById(`details-${code}`);
-            if (details.style.display === 'none' || details.style.display === '') {
-                details.style.display = 'block';
-            } else {
-                details.style.display = 'none';
-            }
+        // 초기 데이터 설정
+        let allStocks = [];
+        let currentPage = 1;
+        const itemsPerPage = 30;
+        let currentDividendFilter = null;
+        
+        // 서버에서 데이터 가져오기
+        function initializeStocks() {
+            fetch('/filter?limit=30')
+                .then(response => response.json())
+                .then(data => {
+                    allStocks = data;
+                    updateStockList();
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('데이터를 불러오는 중 오류가 발생했습니다.');
+                });
         }
-
+        
         // 로딩 인디케이터 표시 함수
         function showLoading(text = '데이터를 불러오는 중...') {
             document.getElementById('loadingText').textContent = text;
@@ -190,39 +192,76 @@
             document.getElementById('loadingIndicator').style.display = 'none';
         }
 
-        let currentLimit = 30;
-        let currentPage = 1;
-        let allStocks = [];
-
-        // 초기 데이터 설정
-        document.addEventListener('DOMContentLoaded', function() {
-            // 초기 데이터를 allStocks에 저장
-            allStocks = JSON.parse('{{ top_stocks|tojson|safe }}');
-            // 초기 30개만 표시
-            updateStockList();
-        });
+        function toggleDetails(code) {
+            const details = document.getElementById(`details-${code}`);
+            if (details.style.display === 'none' || details.style.display === '') {
+                details.style.display = 'block';
+            } else {
+                details.style.display = 'none';
+            }
+        }
 
         function applyFilter(limit) {
-            currentLimit = limit;
-            currentPage = 1;
             document.getElementById('currentLimit').textContent = limit;
             showLoading('데이터를 불러오는 중...');
             
-            fetch(`/filter?limit=${limit}`)
+            let url = `/filter?limit=${limit}`;
+            if (currentDividendFilter !== null) {
+                url += `&dividend=${currentDividendFilter}`;
+            }
+            
+            fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     hideLoading();
-                    if (data.error) {
-                        alert(data.error);
-                        return;
-                    }
                     allStocks = data;
+                    currentPage = 1;
                     updateStockList();
                 })
                 .catch(error => {
                     hideLoading();
+                    alert('필터 적용 중 오류가 발생했습니다.');
                     console.error('Error:', error);
-                    alert('데이터를 가져오는 중 오류가 발생했습니다.');
+                });
+        }
+
+        function filterByDividend(dividend) {
+            currentDividendFilter = dividend;
+            showLoading('데이터를 불러오는 중...');
+            
+            // 모든 배당수익률 버튼의 active 클래스 제거
+            document.querySelectorAll('.btn-group .btn-outline-primary').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 선택된 버튼에 active 클래스 추가
+            let selectedButton;
+            if (dividend === null) {
+                selectedButton = document.querySelector('.btn-group .btn-outline-primary[data-dividend=""]');
+            } else {
+                selectedButton = document.querySelector(`.btn-group .btn-outline-primary[data-dividend="${dividend}"]`);
+            }
+            if (selectedButton) {
+                selectedButton.classList.add('active');
+            }
+            
+            let url = `/filter?limit=${document.getElementById('currentLimit').textContent}`;
+            if (dividend !== null) {
+                url += `&dividend=${dividend}`;
+            }
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    allStocks = data;
+                    currentPage = 1;
+                    updateStockList();
+                })
+                .catch(error => {
+                    hideLoading();
+                    alert('필터 적용 중 오류가 발생했습니다.');
+                    console.error('Error:', error);
                 });
         }
 
@@ -232,7 +271,7 @@
             row.className = 'row g-3';
             
             const startIndex = 0;
-            const endIndex = currentPage * 30;
+            const endIndex = currentPage * itemsPerPage;
             const stocksToShow = allStocks.slice(startIndex, endIndex);
             
             stocksToShow.forEach((stock, index) => {
@@ -245,15 +284,18 @@
                                 <span class="badge bg-primary me-2">${index + 1}위</span>
                                 ${stock.name} (${stock.code})
                             </h5>
+                            <p class="card-text mb-2">
+                                안전마진: 
+                                <span class="${stock.safety_margin > 0 ? 'safety-margin-positive' : 'safety-margin-negative'}">
+                                    ${Number(stock.safety_margin).toFixed(1)}%
+                                </span>
+                            </p>
                             <div id="details-${stock.code}" class="stock-details">
                                 <p class="card-text">
                                     현재가: ${Number(stock.current_price).toLocaleString()}원<br>
                                     내재가치: ${Number(stock.intrinsic_value).toLocaleString()}원<br>
-                                    안전마진: 
-                                    <span class="${stock.safety_margin > 0 ? 'safety-margin-positive' : 'safety-margin-negative'}">
-                                        ${Number(stock.safety_margin).toFixed(1)}%
-                                    </span>
-                                    ${stock.treasury_ratio > 0 ? `<br>자사주비율: ${Number(stock.treasury_ratio).toFixed(1)}%` : ''}
+                                    ${stock.treasury_ratio ? `자사주비율: ${Number(stock.treasury_ratio).toFixed(1)}%<br>` : ''}
+                                    ${stock.dividend_yield ? `배당수익률: ${Number(stock.dividend_yield).toFixed(2)}%` : ''}
                                 </p>
                             </div>
                         </div>
@@ -284,9 +326,23 @@
             updateStockList();
         }
 
-        function exportExcel() {
-            window.location.href = `/export_excel?limit=${currentLimit}`;
+        // 엑셀 내보내기 함수
+        function exportToExcel() {
+            const activeButton = document.querySelector('.btn-group .btn-outline-primary.active');
+            const dividendFilter = activeButton ? activeButton.dataset.dividend : null;
+            const limit = document.getElementById('currentLimit').textContent;
+            let url = `/export?limit=${limit}`;
+            if (dividendFilter) {
+                url += `&dividend=${dividendFilter}`;
+            }
+            window.location.href = url;
         }
+
+        // 초기 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeStocks();
+            document.querySelector('.btn-group .btn-outline-primary[data-dividend=""]').classList.add('active');
+        });
     </script>
 </body>
 </html> 

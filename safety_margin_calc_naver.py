@@ -13,6 +13,7 @@ import os
 import concurrent.futures
 from tqdm import tqdm
 import math
+from bs4 import BeautifulSoup
 
 # KRX 종목 목록 파일 경로
 KRX_STOCKS_FILE = 'krx_stocks.json'
@@ -330,24 +331,46 @@ def analyze_stock(ticker: str) -> dict:
         }
     """
     try:
-        # 주식 데이터 조회
-        df, stock_name, current_price = get_stock_data(ticker)
-        if df.empty:
-            return {'error': '재무제표 데이터를 가져올 수 없습니다.'}
-            
-        # 자사주 정보 조회
-        treasury_stock = get_treasury_stock_info(ticker)
+        # 네이버 금융에서 데이터 가져오기
+        url = f'https://finance.naver.com/item/main.naver?code={ticker}'
+        response = requests.get(url)
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # 종목명 가져오기
+        stock_name = soup.select_one('#middle > div.h_company > div.wrap_company > h2 > a').text.strip()
+        
+        # 현재가 가져오기
+        current_price = float(soup.select_one('#chart_area > div.rate_info > div > p.no_today > em > span.blind').text.strip().replace(',', ''))
+        
+        # 배당수익률 가져오기
+        dividend_yield = None
+        try:
+            dividend_yield_text = soup.select_one('#_dvr').text.strip()
+            if dividend_yield_text and dividend_yield_text != 'N/A':
+                dividend_yield = float(dividend_yield_text.replace('%', ''))
+        except:
+            pass
+        
+        # 재무 데이터 가져오기
+        df, _, _, treasury_stock = get_historical_metrics(ticker)
         
         # 내재가치 계산
         intrinsic_value = calculate_intrinsic_value(df, treasury_stock)
-        if intrinsic_value is None:
-            return {'error': '내재가치를 계산할 수 없습니다.'}
-            
+        
         # 안전마진 계산
         safety_margin = None
-        if current_price:
-            safety_margin = (intrinsic_value - current_price) / current_price * 100
-            
+        if current_price and intrinsic_value:
+            safety_margin = ((intrinsic_value - current_price) / current_price) * 100
+        
+        # 재무지표 데이터 포맷팅
+        historical_data = {}
+        for _, row in df.iterrows():
+            historical_data[row.name] = {
+                'PBR': float(row['PBR']) if not pd.isna(row['PBR']) else None,
+                'EPS': float(row['EPS']) if not pd.isna(row['EPS']) else None,
+                'BPS': float(row['BPS']) if not pd.isna(row['BPS']) else None
+            }
+        
         return {
             'stock_name': stock_name,
             'current_price': current_price,
@@ -355,12 +378,12 @@ def analyze_stock(ticker: str) -> dict:
             'safety_margin': safety_margin,
             'treasury_shares': treasury_stock.get('shares', 0),
             'treasury_ratio': treasury_stock.get('ratio', 0),
-            'historical_data': df.to_dict('index'),
-            'error': None
+            'dividend_yield': dividend_yield,
+            'historical_data': historical_data
         }
         
     except Exception as e:
-        return {'error': f'분석 중 오류가 발생했습니다: {str(e)}'}
+        return {'error': str(e)}
 
 def analyze_stock_wrapper(args):
     """analyze_stock 함수를 병렬 처리하기 위한 래퍼 함수"""
@@ -374,7 +397,8 @@ def analyze_stock_wrapper(args):
                 'current_price': result['current_price'],
                 'intrinsic_value': result['intrinsic_value'],
                 'safety_margin': result['safety_margin'],
-                'treasury_ratio': result['treasury_ratio']
+                'treasury_ratio': result['treasury_ratio'],
+                'dividend_yield': result['dividend_yield']
             }
     except Exception as e:
         print(f"종목 {code} 분석 중 오류 발생: {e}")
@@ -388,8 +412,8 @@ def margin_key(x):
 def analyze_all_stocks(limit: int = 30) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
-    순차 처리 방식으로 변경하여 안정성을 높였습니다.
-    전체 결과는 all_safety_margin_results.json 파일에 저장됩니다.
+    각 종목별로 마지막 업데이트 시간을 저장하고,
+    4시간이 지나지 않은 종목은 건너뜁니다.
     """
     if KRX_STOCKS is None:
         return []
@@ -397,48 +421,85 @@ def analyze_all_stocks(limit: int = 30) -> list:
     total_stocks = len(KRX_STOCKS)
     print(f"\n전체 {total_stocks}개 종목 분석 시작...")
     
+    # 기존 결과 파일이 있으면 로드
+    existing_results = []
+    if os.path.exists('all_safety_margin_results.json'):
+        try:
+            with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+                existing_results = json.load(f)
+        except Exception as e:
+            print(f"기존 결과 파일 로드 중 오류 발생: {e}")
+    
     # 분석할 종목 목록 준비
     stock_list = [(row['Code'], row['Name']) for _, row in KRX_STOCKS.iterrows()]
     
     # 순차 처리로 종목 분석
-    results = []
+    results = existing_results.copy()  # 기존 결과 복사
+    current_time = datetime.now()
+    skipped_count = 0
+    
     for i, (code, name) in enumerate(tqdm(stock_list, desc="종목 분석 중")):
+        # 기존 결과에서 해당 종목 찾기
+        existing_stock = next((item for item in results if item['code'] == code), None)
+        
+        # 4시간이 지나지 않은 종목은 건너뛰기
+        if existing_stock and 'last_updated' in existing_stock:
+            last_updated = datetime.fromisoformat(existing_stock['last_updated'])
+            if (current_time - last_updated).total_seconds() < 3600 * 4:  # 4시간
+                skipped_count += 1
+                continue
+        
         try:
             result = analyze_stock(code)
             if not result.get('error') and result.get('safety_margin') is not None:
-                results.append({
+                stock_data = {
                     'code': code,
                     'name': result['stock_name'],
                     'current_price': result['current_price'],
                     'intrinsic_value': result['intrinsic_value'],
                     'safety_margin': result['safety_margin'],
-                    'treasury_ratio': result['treasury_ratio']
-                })
-                # 진행 상황 출력 (100개 종목마다)
-                if (i + 1) % 100 == 0:
+                    'treasury_ratio': result['treasury_ratio'],
+                    'dividend_yield': result['dividend_yield'],
+                    'last_updated': current_time.isoformat()  # 업데이트 시간 저장
+                }
+                
+                # 기존 결과에서 해당 종목 찾아 업데이트
+                if existing_stock:
+                    for j, item in enumerate(results):
+                        if item['code'] == code:
+                            results[j] = stock_data
+                            break
+                else:
+                    results.append(stock_data)
+                
+                # 매 10개 종목마다 파일 저장
+                if (i + 1) % 10 == 0:
+                    # 안전마진 기준으로 정렬
+                    results.sort(key=margin_key, reverse=True)
+                    with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
+                        json.dump(results, f, ensure_ascii=False, indent=2)
                     print(f"\n{i + 1}/{total_stocks} 종목 분석 완료")
                     print(f"현재까지 {len(results)}개 종목 분석 성공")
+                    # print(f"건너뛴 종목 수: {skipped_count}")
+                    
         except Exception as e:
             print(f"\n종목 {code} ({name}) 분석 중 오류 발생: {e}")
+            # 오류 발생 시에도 현재까지의 결과 저장
+            results.sort(key=margin_key, reverse=True)
+            with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
+                json.dump(results, f, ensure_ascii=False, indent=2)
+            continue
     
-    # 안전마진 기준으로 정렬 (nan 값 처리)
+    # 최종 결과 저장
     results.sort(key=margin_key, reverse=True)
-    
-    # 전체 결과를 파일로 저장
-    try:
-        with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-        print(f"\n전체 {len(results)}개 종목의 분석 결과가 all_safety_margin_results.json 파일에 저장되었습니다.")
-    except Exception as e:
-        print(f"\n전체 결과 저장 중 오류 발생: {e}")
-    
-    # 상위 종목만 선택하여 반환
-    top_stocks = results[:limit]
+    with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False, indent=2)
     
     print(f"\n분석 완료: {len(results)}개 종목 분석 성공")
+    print(f"건너뛴 종목 수: {skipped_count}")
     print(f"상위 {limit}개 종목 반환")
     
-    return top_stocks
+    return results[:limit]
 
 def get_top_safety_margin_stocks(limit: int = 30) -> list:
     """
@@ -451,23 +512,6 @@ def get_top_safety_margin_stocks(limit: int = 30) -> list:
     Returns:
         list: 안전마진 기준 상위 종목 목록
     """
-    # 캐시된 결과 확인
-    if os.path.exists('all_safety_margin_results.json'):
-        # 파일의 수정 시간 확인
-        file_time = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json'))
-        now = datetime.now()
-        
-        # 1시간이 지나지 않았다면 파일에서 로드
-        if now - file_time < timedelta(hours=1):
-            try:
-                with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-                    results = json.load(f)
-                # 안전마진 기준으로 정렬 (nan 값 처리)
-                results.sort(key=margin_key, reverse=True)
-                return results[:limit]
-            except Exception as e:
-                print(f"안전마진 결과 파일 로드 중 오류 발생: {e}")
-    
     # 새로 분석
     results = analyze_all_stocks(limit)
     
@@ -492,3 +536,5 @@ if __name__ == "__main__":
         print(f"안전마진: {stock['safety_margin']:+.1f}%")
         if stock['treasury_ratio'] > 0:
             print(f"자사주비율: {stock['treasury_ratio']:.1f}%")
+        if stock['dividend_yield'] is not None:
+            print(f"배당수익률: {stock['dividend_yield']:.2f}%")
