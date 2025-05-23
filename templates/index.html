@@ -161,37 +161,59 @@
 
         <!-- 상위 종목 섹션 -->
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="mb-0">안전마진 상위 종목 Top 30</h2>
-            <div class="last-update">
-                마지막 업데이트: {{ last_update }}
+            <div class="d-flex align-items-center">
+                <h2 class="mb-0 me-3">안전마진 상위 종목</h2>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                        Top <span id="currentLimit">30</span>
+                    </button>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="#" onclick="applyFilter(30)">Top 30</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="applyFilter(50)">Top 50</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="applyFilter(100)">Top 100</a></li>
+                        <li><a class="dropdown-item" href="#" onclick="applyFilter(200)">Top 200</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="d-flex align-items-center">
+                <div class="last-update me-3">
+                    마지막 업데이트: {{ last_update }}
+                </div>
+                <button class="btn btn-success" onclick="exportExcel()">
+                    <i class="bi bi-file-excel"></i> 엑셀 내보내기
+                </button>
             </div>
         </div>
-        <div class="row">
-            {% for stock in top_stocks %}
-            <div class="col-md-4 mb-4">
-                <div class="card stock-card" onclick="toggleDetails('{{ stock.code }}')">
-                    <div class="card-body">
-                        <h5 class="card-title">
-                            <span class="badge bg-primary me-2">{{ loop.index }}위</span>
-                            {{ stock.name }} ({{ stock.code }})
-                        </h5>
-                        <div id="details-{{ stock.code }}" class="stock-details">
-                            <p class="card-text">
-                                현재가: {{ "{:,}".format(stock.current_price|int) }}원<br>
-                                내재가치: {{ "{:,}".format(stock.intrinsic_value|int) }}원<br>
-                                안전마진: 
-                                <span class="{% if stock.safety_margin > 0 %}safety-margin-positive{% else %}safety-margin-negative{% endif %}">
-                                    {{ "%.1f"|format(stock.safety_margin) }}%
-                                </span>
-                                {% if stock.treasury_ratio > 0 %}
-                                <br>자사주비율: {{ "%.1f"|format(stock.treasury_ratio) }}%
-                                {% endif %}
-                            </p>
+
+        <!-- 종목 리스트 컨테이너 -->
+        <div id="stockListContainer">
+            <div class="row">
+                {% for stock in top_stocks %}
+                <div class="col-md-4 mb-4">
+                    <div class="card stock-card" onclick="toggleDetails('{{ stock.code }}')">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <span class="badge bg-primary me-2">{{ loop.index }}위</span>
+                                {{ stock.name }} ({{ stock.code }})
+                            </h5>
+                            <div id="details-{{ stock.code }}" class="stock-details">
+                                <p class="card-text">
+                                    현재가: {{ "{:,}".format(stock.current_price|int) }}원<br>
+                                    내재가치: {{ "{:,}".format(stock.intrinsic_value|int) }}원<br>
+                                    안전마진: 
+                                    <span class="{% if stock.safety_margin > 0 %}safety-margin-positive{% else %}safety-margin-negative{% endif %}">
+                                        {{ "%.1f"|format(stock.safety_margin) }}%
+                                    </span>
+                                    {% if stock.treasury_ratio > 0 %}
+                                    <br>자사주비율: {{ "%.1f"|format(stock.treasury_ratio) }}%
+                                    {% endif %}
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
     </div>
 
@@ -343,6 +365,104 @@
                 })
             })
         });
+
+        let currentLimit = 30;
+        let currentPage = 1;
+        let allStocks = [];
+
+        // 초기 데이터 설정
+        document.addEventListener('DOMContentLoaded', function() {
+            // 초기 데이터를 allStocks에 저장
+            allStocks = JSON.parse('{{ top_stocks|tojson|safe }}');
+            // 초기 20개만 표시
+            updateStockList();
+        });
+
+        function applyFilter(limit) {
+            currentLimit = limit;
+            currentPage = 1;
+            document.getElementById('currentLimit').textContent = limit;
+            showLoading('데이터를 불러오는 중...');
+            
+            fetch(`/filter?limit=${limit}`)
+                .then(response => response.json())
+                .then(data => {
+                    hideLoading();
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+                    allStocks = data;
+                    updateStockList();
+                })
+                .catch(error => {
+                    hideLoading();
+                    console.error('Error:', error);
+                    alert('데이터를 가져오는 중 오류가 발생했습니다.');
+                });
+        }
+
+        function updateStockList() {
+            const stockListContainer = document.getElementById('stockListContainer');
+            const row = document.createElement('div');
+            row.className = 'row';
+            
+            const startIndex = 0;
+            const endIndex = currentPage * 30;
+            const stocksToShow = allStocks.slice(startIndex, endIndex);
+            
+            stocksToShow.forEach((stock, index) => {
+                const col = document.createElement('div');
+                col.className = 'col-md-4 mb-4';
+                col.innerHTML = `
+                    <div class="card stock-card" onclick="toggleDetails('${stock.code}')">
+                        <div class="card-body">
+                            <h5 class="card-title">
+                                <span class="badge bg-primary me-2">${index + 1}위</span>
+                                ${stock.name} (${stock.code})
+                            </h5>
+                            <div id="details-${stock.code}" class="stock-details">
+                                <p class="card-text">
+                                    현재가: ${Number(stock.current_price).toLocaleString()}원<br>
+                                    내재가치: ${Number(stock.intrinsic_value).toLocaleString()}원<br>
+                                    안전마진: 
+                                    <span class="${stock.safety_margin > 0 ? 'safety-margin-positive' : 'safety-margin-negative'}">
+                                        ${Number(stock.safety_margin).toFixed(1)}%
+                                    </span>
+                                    ${stock.treasury_ratio > 0 ? `<br>자사주비율: ${Number(stock.treasury_ratio).toFixed(1)}%` : ''}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                row.appendChild(col);
+            });
+            
+            // 기존 내용을 지우고 새로운 내용으로 교체
+            stockListContainer.innerHTML = '';
+            stockListContainer.appendChild(row);
+            
+            // 더보기 버튼 추가
+            if (endIndex < allStocks.length) {
+                const loadMoreButton = document.createElement('div');
+                loadMoreButton.className = 'text-center mt-3';
+                loadMoreButton.innerHTML = `
+                    <button class="btn btn-outline-primary" onclick="loadMore()">
+                        더보기 (${allStocks.length - endIndex}개 더)
+                    </button>
+                `;
+                stockListContainer.appendChild(loadMoreButton);
+            }
+        }
+
+        function loadMore() {
+            currentPage++;
+            updateStockList();
+        }
+
+        function exportExcel() {
+            window.location.href = `/export_excel?limit=${currentLimit}`;
+        }
     </script>
 </body>
 </html> 
