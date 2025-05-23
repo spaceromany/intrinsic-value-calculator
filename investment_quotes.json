@@ -1,0 +1,34 @@
+{
+    "quotes": [
+        {
+            "quote": "주식시장은 단기적으로는 투표기계이고, 장기적으로는 저울이다.",
+            "author": "벤저민 그레이엄",
+            "source": "현명한 투자자",
+            "original": "In the short run, the market is a voting machine, but in the long run, it is a weighing machine."
+        },
+        {
+            "quote": "가격이 내재가치보다 낮을 때 사고, 높을 때 팔아라.",
+            "author": "벤저민 그레이엄",
+            "source": "현명한 투자자",
+            "original": "Buy when the price is below intrinsic value, sell when it's above."
+        },
+        {
+            "quote": "안전마진은 투자의 핵심이다.",
+            "author": "벤저민 그레이엄",
+            "source": "현명한 투자자",
+            "original": "The margin of safety is the central concept of investment."
+        },
+        {
+            "quote": "시장이 두려워할 때 탐욕스러워지고, 시장이 탐욕스러울 때 두려워하라.",
+            "author": "워렌 버핏",
+            "source": "주주서한",
+            "original": "Be fearful when others are greedy and greedy when others are fearful."
+        },
+        {
+            "quote": "가격은 당신이 지불하는 것이고, 가치는 당신이 얻는 것이다.",
+            "author": "워렌 버핏",
+            "source": "주주서한",
+            "original": "Price is what you pay. Value is what you get."
+        }
+    ]
+} 

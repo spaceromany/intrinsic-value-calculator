@@ -1,410 +1,528 @@
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>내재가치 계산기</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.min.js"></script>
-    <style>
-        body { 
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .loading { display: none; }
-        .error-message { display: none; color: red; margin-top: 10px; }
-        .safety-margin-positive { color: #198754; }
-        .safety-margin-negative { color: #dc3545; }
-        .search-results {
-            position: absolute;
-            z-index: 1000;
-            background: white;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            width: 100%;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .search-result-item {
-            padding: 10px 15px;
-            border-bottom: 1px solid #eee;
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-        }
-        .search-result-item:hover {
-            background-color: #f8f9fa;
-        }
-        .search-result-item:last-child {
-            border-bottom: none;
-        }
-        #searchResults {
-            position: absolute;
-            z-index: 1000;
-            background: white;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            width: 100%;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        #searchResults .list-group-item {
-            cursor: pointer;
-            transition: background-color 0.2s ease;
-            border: none;
-            border-bottom: 1px solid #dee2e6;
-            padding: 0.75rem 1rem;
-        }
-        #searchResults .list-group-item:last-child {
-            border-bottom: none;
-        }
-        #searchResults .list-group-item:hover {
-            background-color: #f8f9fa;
-        }
-        .formula-section { 
-            background-color: #f8f9fa; 
-            padding: 15px; 
-            border-radius: 5px; 
-            margin-top: 20px;
-            font-size: 0.9em;
-        }
-        .formula-section h5 {
-            color: #0d6efd;
-            margin-bottom: 10px;
-        }
-        .nav-link {
-            color: #495057;
-            font-weight: 500;
-        }
-        .nav-link.active {
-            color: #0d6efd;
-            font-weight: 600;
-        }
-        .card {
-            border: none;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .card-body {
-            padding: 1.25rem;
-        }
-        .quote-container {
-            background: linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%);
-            border-radius: 15px;
-            padding: 2rem;
-            margin: 2rem 0;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-            position: relative;
-            border-top: 3px solid #0d6efd;
-        }
-        .quote-container::before {
-            content: '"';
-            position: absolute;
-            top: -20px;
-            left: 20px;
-            font-size: 120px;
-            color: rgba(13, 110, 253, 0.1);
-            font-family: Georgia, serif;
-        }
-        .quote-text {
-            font-size: 1.5rem;
-            line-height: 1.6;
-            color: #212529;
-            margin-bottom: 1.5rem;
-            font-weight: 500;
-            text-align: center;
-        }
-        .quote-original {
-            font-size: 1.1rem;
-            color: #6c757d;
-            font-style: italic;
-            margin-bottom: 1rem;
-            padding-left: 1rem;
-            border-left: 3px solid #dee2e6;
-            text-align: center;
-        }
-        .quote-author {
-            font-size: 1.2rem;
-            color: #0d6efd;
-            font-weight: 600;
-            margin-bottom: 0.5rem;
-            text-align: center;
-        }
-        .quote-source {
-            font-size: 0.9rem;
-            color: #6c757d;
-            text-align: center;
-        }
-        .calculator-section {
-            background-color: white;
-            border-radius: 15px;
-            padding: 2rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .form-label {
-            font-weight: 500;
-            color: #495057;
-        }
-        .btn-primary {
-            padding: 0.5rem 2rem;
-        }
-        .result-section {
-            margin-top: 2rem;
-            padding: 1.5rem;
-            border-radius: 10px;
-            background-color: #f8f9fa;
-        }
-        @media (max-width: 768px) {
-            body {
-                padding: 10px;
-            }
-            .container {
-                padding: 0 10px;
-            }
-            .card-body {
-                padding: 1rem;
-            }
-            .quote-text {
-                font-size: 1.2rem;
-            }
-            .quote-original {
-                font-size: 1rem;
-            }
-            .quote-container {
-                padding: 1.5rem;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container py-4">
-        <!-- 네비게이션 바 -->
-        <nav class="navbar navbar-expand-lg navbar-light bg-white rounded shadow-sm mb-4">
-            <div class="container-fluid">
-                <a class="navbar-brand" href="/">내재가치 계산기</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link active" href="/">내재가치 계산기</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link" href="/top-stocks">안전마진 상위 종목</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-        </nav>
+{% extends "base.html" %}
 
-        <!-- 로딩 인디케이터 -->
-        <div id="loadingIndicator" class="position-fixed top-50 start-50 translate-middle" style="display: none; z-index: 1000;">
-            <div class="d-flex flex-column align-items-center">
-                <div class="spinner-border text-primary" role="status">
-                    <span class="visually-hidden">Loading...</span>
-                </div>
-                <div class="mt-2" id="loadingText">데이터를 불러오는 중...</div>
-            </div>
+{% block content %}
+<div class="container mt-4">
+    <!-- 검색 섹션 -->
+    <div class="bg-white rounded shadow-sm p-4 mb-4">
+        <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
+            <h2 class="mb-0 fw-bold text-primary">내재가치 계산기</h2>
         </div>
-
-        <!-- 계산기 섹션 -->
-        <div class="calculator-section">
-            <h2 class="mb-4">
-                내재가치 계산기
-                <i class="bi bi-info-circle" 
-                   data-bs-toggle="tooltip" 
-                   data-bs-placement="right" 
-                   data-bs-html="true"
-                   title="<b>내재가치 계산 방법</b><br><br>
-                          <b>1. EPS 가중평균 계산:</b><br>
-                          - 최근년도 EPS × 3<br>
-                          - 전년도 EPS × 2<br>
-                          - 전전년도 EPS × 1<br>
-                          - 가중평균 = (최근년도EPS×3 + 전년도EPS×2 + 전전년도EPS×1) ÷ 6<br><br>
-                          <b>2. 내재가치 계산:</b><br>
-                          - 기본 내재가치 = (EPS 가중평균 × 10 + 최근년도 BPS) ÷ 2<br>
-                          - 자기주식이 있는 경우: 내재가치 = 기본 내재가치 × (100 ÷ (100 - 자기주식비율))<br><br>
-                          <b>3. 안전마진 계산:</b><br>
-                          - 안전마진 = ((내재가치 - 현재가) ÷ 현재가) × 100">
-                </i>
-            </h2>
-            <form id="calculatorForm">
-                <div class="mb-3">
-                    <label for="stockCode" class="form-label">종목명</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="stockCode" placeholder="종목명을 입력하세요">
-                        <button class="btn btn-outline-secondary" type="button" onclick="searchStock()">검색</button>
-                    </div>
-                    <div id="searchResults" class="list-group mt-2" style="display: none;"></div>
+        
+        <div class="row g-3">
+            <div class="col-md-8">
+                <div class="input-group">
+                    <input type="text" id="searchInput" class="form-control" placeholder="종목명 또는 종목코드를 입력하세요">
+                    <button class="btn btn-primary" onclick="searchStocks()">
+                        <i class="fas fa-search me-1"></i>검색
+                    </button>
                 </div>
-            </form>
-
-            <div id="resultSection" class="result-section" style="display: none;">
-                <h4 class="mb-3">분석 결과</h4>
-                <div id="resultContent"></div>
             </div>
-        </div>
-
-        <!-- 격언 섹션 -->
-        <div class="quote-container">
-            <div class="quote-text">{{ quote.quote }}</div>
-            <div class="quote-original">{{ quote.original }}</div>
-            <div class="quote-author">{{ quote.author }}</div>
-            <div class="quote-source">{{ quote.source }}</div>
         </div>
     </div>
 
-    <script>
-        // 로딩 인디케이터 표시 함수
-        function showLoading(text = '데이터를 불러오는 중...') {
-            document.getElementById('loadingText').textContent = text;
-            document.getElementById('loadingIndicator').style.display = 'block';
-        }
+    <!-- 검색 결과 섹션 -->
+    <div id="searchResults" class="bg-white rounded shadow-sm p-4 mb-4" style="display: none;">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="mb-0 fw-bold">검색 결과</h3>
+            <small class="text-muted"></small>
+        </div>
+        <div class="row g-3" id="searchResultsGrid">
+            <!-- 여기에 검색 결과가 동적으로 로드됩니다 -->
+        </div>
+    </div>
 
-        // 로딩 인디케이터 숨김 함수
-        function hideLoading() {
-            document.getElementById('loadingIndicator').style.display = 'none';
-        }
 
-        // 검색 함수
-        function searchStock() {
-            const query = document.getElementById('stockCode').value.trim();
-            if (!query) {
-                document.getElementById('searchResults').style.display = 'none';
-                return;
+    <!-- 관심종목 섹션 -->
+    <div class="bg-white rounded shadow-sm p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 class="mb-0 fw-bold">관심종목</h3>
+            <button class="btn btn-outline-success btn-sm" onclick="exportWatchlist()" title="엑셀 내보내기">
+                <i class="fas fa-file-excel me-1"></i>
+                <span class="d-none d-sm-inline">엑셀</span>
+            </button>
+        </div>
+        <div class="row g-3" id="watchlistGrid">
+            <!-- 여기에 관심종목이 동적으로 로드됩니다 -->
+        </div>
+    </div>
+</div>
+
+<style>
+    body { 
+        background-color: #f8f9fa;
+    }
+    .stock-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        height: 100%;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
+    }
+    .stock-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+    }
+    .stock-details {
+        display: none;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+        border-radius: 0.5rem;
+        padding: 1rem;
+    }
+    .stock-details.show {
+        display: block;
+        animation: fadeIn 0.3s ease-in-out;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .heart-icon {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: rgba(255, 255, 255, 0.9);
+        padding: 5px;
+        border-radius: 50%;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .heart-icon:hover {
+        transform: scale(1.1);
+    }
+    .heart-icon i {
+        font-size: 1.2rem;
+    }
+    .safety-margin-positive {
+        color: #198754;
+        font-weight: 600;
+    }
+    .safety-margin-negative {
+        color: #dc3545;
+        font-weight: 600;
+    }
+    .detail-item {
+        display: flex;
+        flex-direction: column;
+        margin-bottom: 0.75rem;
+        padding: 0.5rem;
+        background-color: white;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .detail-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-bottom: 0.25rem;
+    }
+    .detail-value {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+    .last-update {
+        color: #6c757d;
+        font-size: 0.9em;
+        background-color: #f8f9fa;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+    }
+    .card-title {
+        font-size: 1.1rem;
+        margin-bottom: 0.75rem;
+    }
+    .card-title small {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+    .input-group {
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .input-group .form-control {
+        border-right: none;
+    }
+    .input-group .btn {
+        border-left: none;
+    }
+    @media (max-width: 768px) {
+        .container {
+            padding: 0 10px;
+        }
+        .col-md-4 {
+            padding: 0 5px;
+        }
+        .card-body {
+            padding: 1rem;
+        }
+        .stock-card {
+            margin-bottom: 1rem;
+        }
+    }
+</style>
+
+<script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
+<script>
+// 디바운스 함수 추가
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Enter 키 이벤트 리스너 추가
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            searchStocks();
+        }
+    });
+    
+    // 실시간 검색을 위한 이벤트 리스너 추가
+    const searchInput = document.getElementById('searchInput');
+    const debouncedSearch = debounce(() => {
+        const query = searchInput.value.trim();
+        if (query.length >= 2) { // 2글자 이상 입력 시 검색 시작
+            searchStocks();
+        } else {
+            document.getElementById('searchResults').style.display = 'none';
+        }
+    }, 300); // 300ms 디바운스
+
+    searchInput.addEventListener('input', debouncedSearch);
+    
+    // watchlistManager 초기화 확인
+    if (window.watchlistManager) {
+        loadWatchlist();
+    }
+});
+
+async function searchStocks() {
+    const searchInput = document.getElementById('searchInput');
+    const query = searchInput.value.trim();
+    
+    if (!query) {
+        document.getElementById('searchResults').style.display = 'none';
+        return;
+    }
+
+    try {
+        const response = await fetch(`/search?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        const resultsDiv = document.getElementById('searchResults');
+        const grid = document.getElementById('searchResultsGrid');
+        grid.innerHTML = '';
+        
+        if (!data.stocks || data.stocks.length === 0) {
+            resultsDiv.style.display = 'none';
+            return;
+        }
+        
+        resultsDiv.style.display = 'block';
+        
+        data.stocks.forEach((stock, index) => {
+            const isInWatchlist = window.watchlistManager && 
+                                window.watchlistManager.getWatchlist().some(item => item.code === stock.code);
+            
+            // 마지막 업데이트 시간 포맷팅
+            let timeText = '정보 없음';
+            if (stock.last_updated) {
+                const updateDate = new Date(stock.last_updated);
+                const now = new Date();
+                const diffMs = now - updateDate;
+                const diffMins = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                
+                if (diffMins < 60) {
+                    timeText = `${diffMins}분 전`;
+                } else if (diffHours < 24) {
+                    timeText = `${diffHours}시간 전`;
+                } else if (diffDays < 7) {
+                    timeText = `${diffDays}일 전`;
+                } else {
+                    timeText = updateDate.toLocaleDateString('ko-KR', {
+                        year: 'numeric',
+                        month: 'long',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
             }
             
-            fetch(`/search?query=${encodeURIComponent(query)}`)
-                .then(response => response.json())
-                .then(data => {
-                    const resultsDiv = document.getElementById('searchResults');
-                    resultsDiv.innerHTML = '';
-                    
-                    if (data.length > 0) {
-                        data.forEach(stock => {
-                            const div = document.createElement('div');
-                            div.className = 'list-group-item';
-                            div.textContent = `${stock.name} (${stock.code})`;
-                            div.onclick = () => {
-                                analyzeStock(stock.code);
-                                resultsDiv.style.display = 'none';
-                                document.getElementById('stockCode').value = '';
-                            };
-                            resultsDiv.appendChild(div);
-                        });
-                        resultsDiv.style.display = 'block';
-                    } else {
-                        resultsDiv.style.display = 'none';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                    document.getElementById('searchResults').style.display = 'none';
-                });
-        }
-
-        // 종목 분석 함수
-        function analyzeStock(code) {
-            fetch(`/analyze?code=${code}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        console.error(data.error);
-                        return;
-                    }
-                    
-                    // 검색 결과 상세 정보 표시
-                    const detailsDiv = document.getElementById('resultSection');
-                    document.getElementById('resultContent').innerHTML = `
-                        <div class="card">
-                            <div class="card-body">
-                                <h5 class="card-title" id="resultStockName">${data.stock_name} (${code})</h5>
-                                <p class="card-text">
-                                    현재가: <span id="resultCurrentPrice">${data.current_price.toLocaleString()}원</span><br>
-                                    내재가치: <span id="resultIntrinsicValue">${data.intrinsic_value.toLocaleString()}원</span><br>
-                                    안전마진: <span id="resultSafetyMargin" class="${data.safety_margin > 0 ? 'safety-margin-positive' : 'safety-margin-negative'}">${data.safety_margin.toFixed(1)}%</span><br>
-                                    자사주비율: <span id="resultTreasuryRatio">${data.treasury_ratio ? data.treasury_ratio.toFixed(1) : '정보 없음'}</span><br>
-                                    배당수익률: <span id="resultDividendYield">${data.dividend_yield ? data.dividend_yield.toFixed(2) : '정보 없음'}</span>%
-                                </p>
-                                <p class="text-muted small mt-3">
-                                    마지막 업데이트: <span id="resultLastUpdated">${data.last_updated ? new Date(data.last_updated).toLocaleString('ko-KR', {
-                                        year: 'numeric',
-                                        month: '2-digit',
-                                        day: '2-digit',
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        hour12: false
-                                    }) : '정보 없음'}</span>
-                                </p>
+            const col = document.createElement('div');
+            col.className = 'col-12 col-sm-6 col-md-4';
+            col.innerHTML = `
+                <div class="card stock-card" onclick="toggleDetails('${stock.code}')">
+                    <div class="card-body position-relative">
+                        <div class="heart-icon" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">
+                            <i class="${isInWatchlist ? 'fas' : 'far'} fa-heart" 
+                               style="color: ${isInWatchlist ? '#dc3545' : '#6c757d'};"></i>
+                        </div>
+                        <h5 class="card-title">
+                            ${stock.name}
+                            <small class="text-muted d-block">${stock.code}</small>
+                        </h5>
+                        <p class="card-text mb-2">
+                            안전마진: 
+                            <span class="${stock.safety_margin >= 0 ? 'safety-margin-positive' : 'safety-margin-negative'}">
+                                ${Math.round(stock.safety_margin)}%
+                            </span>
+                        </p>
+                        <small class="text-muted d-block mb-2">마지막 업데이트: ${timeText}</small>
+                        <div id="details-${stock.code}" class="stock-details">
+                            <div class="detail-item">
+                                <span class="detail-label">현재가</span>
+                                <span class="detail-value">${Math.round(stock.current_price).toLocaleString()}원</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">내재가치</span>
+                                <span class="detail-value">${Math.round(stock.intrinsic_value).toLocaleString()}원</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">자사주비율</span>
+                                <span class="detail-value">${stock.treasury_ratio ? Math.round(stock.treasury_ratio) + '%' : '-'}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">배당수익률</span>
+                                <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
                             </div>
                         </div>
-                    `;
-                    
-                    detailsDiv.style.display = 'block';
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
+                    </div>
+                </div>
+            `;
+            
+            grid.appendChild(col);
+        });
+    } catch (error) {
+        console.error('검색 중 오류:', error);
+    }
+}
+
+function toggleDetails(code) {
+    const details = document.getElementById(`details-${code}`);
+    details.classList.toggle('show');
+}
+
+function toggleWatchlist(code) {
+    const heartIcon = event.currentTarget.querySelector('i');
+    const isInWatchlist = heartIcon.classList.contains('fas');
+    
+    if (isInWatchlist) {
+        // 관심종목 제거
+        if (window.watchlistManager) {
+            window.watchlistManager.removeFromWatchlist(code);
+            // 현재 클릭된 하트 아이콘 업데이트
+            heartIcon.classList.remove('fas');
+            heartIcon.classList.add('far');
+            heartIcon.style.color = '#6c757d';
+            
+            // 검색 결과의 해당 종목 하트 아이콘도 업데이트
+            const searchResultHeart = document.querySelector(`#searchResultsGrid .heart-icon[onclick*="${code}"] i`);
+            if (searchResultHeart) {
+                searchResultHeart.classList.remove('fas');
+                searchResultHeart.classList.add('far');
+                searchResultHeart.style.color = '#6c757d';
+            }
+            
+            loadWatchlist(); // 관심종목 목록 새로고침
+        }
+    } else {
+        // 관심종목 추가 (매입 정보 없이 바로 추가)
+        if (window.watchlistManager) {
+            window.watchlistManager.addToWatchlist(code);
+            heartIcon.classList.remove('far');
+            heartIcon.classList.add('fas');
+            heartIcon.style.color = '#dc3545';
+            loadWatchlist(); // 관심종목 목록 새로고침
+        }
+    }
+}
+
+async function loadWatchlist() {
+    const watchlistGrid = document.getElementById('watchlistGrid');
+    if (!window.watchlistManager) return;
+
+    const watchlist = window.watchlistManager.getWatchlist();
+
+    if (!watchlist || watchlist.length === 0) {
+        watchlistGrid.innerHTML = '<div class="text-center text-muted">관심종목이 없습니다.</div>';
+        return;
+    }
+
+    try {
+        const response = await fetch('/watchlist/data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ watchlist: watchlist })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to fetch watchlist data');
         }
 
-        // Enter 키로 검색
-        document.getElementById('stockCode').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                searchStock();
-            }
-        });
+        const stocks = await response.json();
 
-        // 검색어 입력 시 자동 검색
-        let searchTimeout;
-        document.getElementById('stockCode').addEventListener('input', function(e) {
-            clearTimeout(searchTimeout);
-            const query = e.target.value.trim();
+        if (!stocks || stocks.length === 0) {
+            watchlistGrid.innerHTML = '<div class="text-center text-muted">관심종목 데이터를 불러올 수 없습니다.</div>';
+            return;
+        }
+
+        const stockCards = stocks.map(stock => {
+            const lastUpdate = stock.last_update ? new Date(stock.last_update) : new Date();
+            const timeSinceUpdate = getTimeSinceUpdate(lastUpdate);
             
-            if (query === '') {
-                document.getElementById('searchResults').style.display = 'none';
-                document.getElementById('resultSection').style.display = 'none';
-                return;
-            }
+            return `
+                <div class="col-12 col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100 stock-card" onclick="toggleDetails('${stock.code}')">
+                        <div class="card-body">
+                            <div class="d-flex align-items-center mb-2">
+                                <div class="heart-icon me-3" style="cursor: pointer;" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">
+                                    <i class="fas fa-heart" style="font-size: 1.2rem; color: #dc3545;"></i>
+                                </div>
+                                <h6 class="card-title mb-0">${stock.name} (${stock.code})</h6>
+                            </div>
+                            <p class="card-text mb-3">
+                                안전마진: 
+                                <span class="${stock.safety_margin >= 0 ? 'text-success' : 'text-danger'} fw-bold">
+                                    ${formatNumber(stock.safety_margin)}%
+                                </span>
+                            </p>
+                            <div class="stock-details" id="details-${stock.code}">
+                                <div class="detail-item">
+                                    <span class="detail-label">현재가</span>
+                                    <span class="detail-value">${formatNumber(stock.current_price)}원</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">내재가치</span>
+                                    <span class="detail-value">${formatNumber(stock.intrinsic_value)}원</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">자사주비율</span>
+                                    <span class="detail-value">${formatNumber(stock.treasury_ratio)}%</span>
+                                </div>
+                                <div class="detail-item">
+                                    <span class="detail-label">배당수익률</span>
+                                    <span class="detail-value">${formatNumber(stock.dividend_yield)}%</span>
+                                </div>
+                            </div>
+                            <div class="mt-3 text-end">
+                                <small class="text-muted">마지막 업데이트: ${timeSinceUpdate}</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
 
-            searchTimeout = setTimeout(() => {
-                searchStock();
-            }, 300); // 300ms 딜레이
+        watchlistGrid.innerHTML = stockCards;
+    } catch (error) {
+        console.error('Error loading watchlist:', error);
+        watchlistGrid.innerHTML = '<div class="text-center text-danger">관심종목을 불러오는 중 오류가 발생했습니다.</div>';
+    }
+}
+
+function getTimeSinceUpdate(date) {
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 60) {
+        return `${diffMins}분 전`;
+    } else if (diffHours < 24) {
+        return `${diffHours}시간 전`;
+    } else if (diffDays < 7) {
+        return `${diffDays}일 전`;
+    } else {
+        return date.toLocaleDateString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    }
+}
+
+function formatNumber(num) {
+    if (num === undefined || num === null) return '-';
+    return Math.round(num).toLocaleString();
+}
+
+async function exportWatchlist() {
+    if (!window.watchlistManager) return;
+    
+    const watchlist = window.watchlistManager.getWatchlist();
+    if (watchlist.length === 0) {
+        alert('내보낼 관심종목이 없습니다.');
+        return;
+    }
+    
+    try {
+        // 먼저 주식 데이터를 가져옵니다
+        const dataResponse = await fetch('/watchlist/data', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ watchlist: watchlist })
         });
 
-        // 검색 결과 외부 클릭 시 리스트 숨기기
-        document.addEventListener('click', function(e) {
-            const searchResults = document.getElementById('searchResults');
-            const stockCode = document.getElementById('stockCode');
-            if (!searchResults.contains(e.target) && e.target !== stockCode) {
-                searchResults.style.display = 'none';
-            }
-        });
+        if (!dataResponse.ok) {
+            throw new Error('주식 데이터를 가져오는 중 오류가 발생했습니다.');
+        }
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // 툴팁 초기화
-            var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
-            var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
-                return new bootstrap.Tooltip(tooltipTriggerEl, {
-                    html: true
-                })
-            });
+        const stocksData = await dataResponse.json();
+        
+        // last_update를 last_updated로 변환
+        const formattedStocks = stocksData.map(stock => ({
+            ...stock,
+            last_updated: stock.last_update,
+            last_update: undefined
+        }));
 
-            // 계산기 폼 제출 이벤트
-            document.getElementById('calculatorForm').addEventListener('submit', function(e) {
-                e.preventDefault();
-                const code = document.getElementById('stockCode').value.trim();
-                if (code) {
-                    analyzeStock(code);
-                }
-            });
+        // 가져온 데이터로 엑셀 내보내기 요청
+        const response = await fetch('/watchlist/export', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                stocks: formattedStocks
+            })
         });
-    </script>
-</body>
-</html> 
+        
+        if (!response.ok) {
+            throw new Error('엑셀 다운로드 중 오류가 발생했습니다.');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '관심종목.xlsx';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+    } catch (error) {
+        console.error('엑셀 내보내기 중 오류:', error);
+        alert('엑셀 내보내기 중 오류가 발생했습니다.');
+    }
+}
+</script>
+{% endblock %} 

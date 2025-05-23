@@ -1,132 +1,50 @@
 from flask import Flask, render_template, request, jsonify, send_file
-from safety_margin_calc_naver import get_historical_metrics, calculate_intrinsic_value, search_stock_codes, analyze_stock, get_top_safety_margin_stocks
+from safety_margin_calc_naver import analyze_all_stocks, load_krx_stocks
 from datetime import datetime
 import os
 import threading
 import time
 import json
 import pandas as pd
-import io
 import math
 from io import BytesIO
 import random
 
 app = Flask(__name__)
 
-# 가치투자 격언 목록
-INVESTMENT_QUOTES = [
-    {
-        "quote": "시장은 단기적으로는 투표 기계이지만, 장기적으로는 저울과 같다.",
-        "original": "In the short run, the market is a voting machine but in the long run, it is a weighing machine.",
-        "author": "벤저민 그레이엄",
-        "source": "The Intelligent Investor"
-    },
-    {
-        "quote": "가격은 당신이 지불하는 것이고, 가치는 당신이 얻는 것이다.",
-        "original": "Price is what you pay. Value is what you get.",
-        "author": "워렌 버핏",
-        "source": "Berkshire Hathaway Annual Meeting"
-    },
-    {
-        "quote": "위험은 당신이 무엇을 하는지 모르는 데서 온다.",
-        "original": "Risk comes from not knowing what you're doing.",
-        "author": "워렌 버핏",
-        "source": "Berkshire Hathaway Annual Meeting"
-    },
-    {
-        "quote": "시장이 비관적일 때 낙관적이 되고, 낙관적일 때 비관적이 되라.",
-        "original": "Be fearful when others are greedy and greedy when others are fearful.",
-        "author": "존 템플턴",
-        "source": "Templeton's Investment Principles"
-    },
-    {
-        "quote": "가장 위험한 것은 위험을 모르는 것이다.",
-        "original": "The most dangerous thing is not knowing the risk.",
-        "author": "피터 린치",
-        "source": "One Up On Wall Street"
-    },
-    {
-        "quote": "주식 시장에서 성공하는 비결은 시장이 두려워할 때 두려워하지 않는 것이다.",
-        "original": "The key to success in the stock market is not being afraid when others are afraid.",
-        "author": "워렌 버핏",
-        "source": "Berkshire Hathaway Annual Meeting"
-    },
-    {
-        "quote": "가격과 가치의 차이를 이해하는 것이 투자의 핵심이다.",
-        "original": "Understanding the difference between price and value is the key to investment.",
-        "author": "벤저민 그레이엄",
-        "source": "The Intelligent Investor"
-    },
-    {
-        "quote": "장기적으로 주식 시장은 기업의 실적을 반영한다.",
-        "original": "In the long run, the stock market reflects the performance of businesses.",
-        "author": "워렌 버핏",
-        "source": "Berkshire Hathaway Annual Meeting"
-    },
-    {
-        "quote": "투자는 단순한 것이지만, 쉽지는 않다.",
-        "original": "Investment is simple, but not easy.",
-        "author": "워렌 버핏",
-        "source": "Berkshire Hathaway Annual Meeting"
-    },
-    {
-        "quote": "시장의 변동성을 두려워하지 마라. 그것은 당신의 친구가 될 수 있다.",
-        "original": "Don't fear market volatility. It can be your friend.",
-        "author": "벤저민 그레이엄",
-        "source": "The Intelligent Investor"
-    },
-    {
-        "quote": "가치투자는 시장의 비효율성을 이용하는 것이다.",
-        "original": "Value investing is exploiting market inefficiencies.",
-        "author": "세스 클라만",
-        "source": "Margin of Safety"
-    },
-    {
-        "quote": "안전마진은 투자의 핵심이다.",
-        "original": "Margin of safety is the cornerstone of investment.",
-        "author": "벤저민 그레이엄",
-        "source": "The Intelligent Investor"
-    },
-    {
-        "quote": "시장이 비합리적일 때 합리적으로 행동하라.",
-        "original": "Be rational when the market is irrational.",
-        "author": "워렌 버핏",
-        "source": "Berkshire Hathaway Annual Meeting"
-    },
-    {
-        "quote": "투자의 목표는 적절한 가격에 좋은 기업을 사는 것이다.",
-        "original": "The goal of investment is to buy good companies at fair prices.",
-        "author": "워렌 버핏",
-        "source": "Berkshire Hathaway Annual Meeting"
-    },
-    {
-        "quote": "시장의 변동성은 기회를 제공한다.",
-        "original": "Market volatility provides opportunities.",
-        "author": "피터 린치",
-        "source": "One Up On Wall Street"
-    }
-]
-
-def get_random_quote():
-    """랜덤으로 격언을 반환하는 함수"""
-    return random.choice(INVESTMENT_QUOTES)
+# 격언 데이터 로드
+def load_quotes():
+    try:
+        with open('investment_quotes.json', 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data['quotes']
+    except Exception as e:
+        print(f"격언 데이터 로드 중 오류 발생: {e}")
+        return []
 
 def background_update():
     """백그라운드에서 주기적으로 데이터를 업데이트하는 함수"""
     while True:
         try:
             print(f"[{datetime.now()}] 데이터 업데이트 시작...")
-            get_top_safety_margin_stocks()
+            analyze_all_stocks()
             print(f"[{datetime.now()}] 데이터 업데이트 완료")
         except Exception as e:
             print(f"[{datetime.now()}] 데이터 업데이트 중 오류 발생: {str(e)}")
         
-        # 1시간 대기
+        load_krx_stocks()
+        # 4시간 대기
         time.sleep(3600*4)
 
 @app.route('/')
 def index():
-    quote = get_random_quote()
+    quotes = load_quotes()
+    quote = random.choice(quotes) if quotes else {
+        'quote': '격언을 불러올 수 없습니다.',
+        'author': '',
+        'source': '',
+        'original': ''
+    }
     return render_template('index.html', quote=quote)
 
 @app.route('/top-stocks')
@@ -135,9 +53,18 @@ def top_stocks():
         # 마지막 업데이트 시간 가져오기
         last_update = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json')).strftime('%Y-%m-%d %H:%M:%S')
         
-        return render_template('calculator.html', last_update=last_update)
+        # 격언 데이터 로드
+        quotes = load_quotes()
+        quote = random.choice(quotes) if quotes else {
+            'quote': '격언을 불러올 수 없습니다.',
+            'author': '',
+            'source': '',
+            'original': ''
+        }
+        
+        return render_template('top-stocks.html', last_update=last_update, quote=quote)
     except Exception as e:
-        return render_template('calculator.html', error=str(e))
+        return render_template('top-stocks.html', error=str(e))
 
 @app.route('/search')
 def search():
@@ -149,54 +76,35 @@ def search():
         with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
             data = json.load(f)
         
+        # 마지막 업데이트 시간 가져오기
+        last_update = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json')).strftime('%Y-%m-%d %H:%M:%S')
+        
         # 종목명으로 검색
         results = [stock for stock in data if query.lower() in stock['name'].lower()]
-        return jsonify(results[:10])  # 최대 10개 결과만 반환
+        return jsonify({
+            'stocks': results[:20],  # 최대 30개 결과 반환
+            'last_update': last_update
+        })
     except Exception as e:
         return jsonify({'error': str(e)})
-
-@app.route('/analyze')
-def analyze():
-    code = request.args.get('code')
-    if not code:
-        return jsonify({'error': '종목코드가 필요합니다.'})
-    
-    try:
-        # all_safety_margin_results.json에서 데이터 읽기
-        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # 해당 종목 찾기
-        stock = next((item for item in data if item['code'] == code), None)
-        if not stock:
-            return jsonify({'error': '종목을 찾을 수 없습니다.'})
-            
-        return jsonify({
-            'stock_name': stock['name'],
-            'current_price': stock['current_price'],
-            'intrinsic_value': stock['intrinsic_value'],
-            'safety_margin': stock['safety_margin'],
-            'treasury_ratio': stock.get('treasury_ratio', None),
-            'dividend_yield': stock.get('dividend_yield', None),
-            'last_updated': stock.get('last_updated', None)
-        })
-        
-    except Exception as e:
-        return jsonify({'error': f'오류가 발생했습니다: {str(e)}'})
 
 @app.route('/filter')
 def filter_stocks():
     try:
+        print("필터링 시작...")
         # JSON 파일에서 데이터 읽기
         with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
             stocks = json.load(f)
+        print(f"총 {len(stocks)}개의 종목 데이터를 읽었습니다.")
         
         # 안전마진 기준으로 정렬
         stocks.sort(key=lambda x: float('-inf') if math.isnan(x.get('safety_margin', float('-inf'))) else x.get('safety_margin', float('-inf')), reverse=True)
+        print("안전마진 기준으로 정렬 완료")
         
         # 배당수익률 필터링
         dividend_filter = request.args.get('dividend', type=float)
         if dividend_filter is not None:
+            print(f"배당수익률 {dividend_filter}% 이상 필터링 시작")
             filtered_stocks = []
             for stock in stocks:
                 try:
@@ -206,66 +114,139 @@ def filter_stocks():
                 except (TypeError, ValueError):
                     continue
             stocks = filtered_stocks
+            print(f"배당수익률 필터링 후 {len(stocks)}개 종목 남음")
         
         # 상위 N개 종목 반환
         limit = request.args.get('limit', default=30, type=int)
-        return jsonify(stocks[:limit])
+        print(f"상위 {limit}개 종목 선택")
+        # 실제 결과 개수와 요청된 limit 중 작은 값 사용
+        actual_limit = min(limit, len(stocks))
+        
+        # NaN 값을 null로 변환
+        for stock in stocks:
+            for key, value in stock.items():
+                if isinstance(value, float) and math.isnan(value):
+                    stock[key] = None
+        
+        result = {
+            'stocks': stocks[:actual_limit],
+            'actual_limit': len(stocks[:actual_limit])
+        }
+        print(f"최종 결과: {len(result['stocks'])}개 종목 반환")
+        return jsonify(result)
     except Exception as e:
-        print(f"필터링 중 오류 발생: {str(e)}")  # 서버 로그에 오류 출력
+        print(f"필터링 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/export')
-def export_excel():
+@app.route('/watchlist/add', methods=['POST'])
+def add_to_watchlist():
     try:
-        # JSON 파일에서 데이터 읽기
+        data = request.get_json()
+        print("Received watchlist add request:", data)  # 디버깅 로그 추가
+        
+        if not data or 'code' not in data or 'purchase_price' not in data or 'purchase_quantity' not in data:
+            print("Missing required fields in request")  # 디버깅 로그 추가
+            return jsonify({'error': 'Missing required fields'}), 400
+
+        code = data['code']
+        purchase_price = float(data['purchase_price'])
+        purchase_quantity = int(data['purchase_quantity'])
+        
+        print(f"Processing stock: {code}, price: {purchase_price}, quantity: {purchase_quantity}")  # 디버깅 로그 추가
+
+        # Read stock information from all_safety_margin_results.json
         with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
             stocks = json.load(f)
+            stock = next((s for s in stocks if s['code'] == code), None)
+            if not stock:
+                print(f"Stock not found: {code}")  # 디버깅 로그 추가
+                return jsonify({'error': 'Stock not found'}), 404
+
+        # Add purchase price and quantity to stock data
+        stock['purchase_price'] = purchase_price
+        stock['purchase_quantity'] = purchase_quantity
         
-        # 안전마진 기준으로 정렬
-        stocks.sort(key=lambda x: float('-inf') if math.isnan(x.get('safety_margin', float('-inf'))) else x.get('safety_margin', float('-inf')), reverse=True)
-        
-        # 배당수익률 필터링
-        dividend_filter = request.args.get('dividend', type=float)
-        if dividend_filter is not None:
-            filtered_stocks = []
-            for stock in stocks:
-                try:
-                    dividend_yield = stock.get('dividend_yield')
-                    if dividend_yield is not None and not math.isnan(dividend_yield) and dividend_yield >= dividend_filter:
-                        filtered_stocks.append(stock)
-                except (TypeError, ValueError):
-                    continue
-            stocks = filtered_stocks
-        
-        # UI에서 선택한 limit 값으로 제한
-        limit = request.args.get('limit', default=30, type=int)
-        stocks = stocks[:limit]
+        print("Returning stock data:", stock)  # 디버깅 로그 추가
+        return jsonify(stock)
+
+    except Exception as e:
+        print(f"Error adding to watchlist: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/watchlist/remove', methods=['POST'])
+def remove_from_watchlist():
+    try:
+        data = request.get_json()
+        if not data or 'code' not in data:
+            return jsonify({'error': '종목코드가 필요합니다.'}), 400
+
+        return jsonify({'message': '관심종목이 제거되었습니다.'})
+
+    except Exception as e:
+        print(f"관심종목 제거 중 오류: {str(e)}")  # 서버 로그에 오류 출력
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/watchlist/export', methods=['POST'])
+def export_watchlist():
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({'error': '데이터가 필요합니다.'}), 400
+
+        # 필터링된 종목 내보내기
+        print(data)
+        stocks = data['stocks']
+        sheet_name = '안전마진 상위종목'
+        limit = data.get('limit', 30)
+        dividend_filter = data.get('dividend_filter')
+        filename = f'안전마진_상위{limit}종목'
+        if dividend_filter:
+            filename += f'_배당수익률{dividend_filter}%이상'
+        filename += '.xlsx'
+
+        if not stocks or len(stocks) == 0:
+            return jsonify({'error': '내보낼 데이터가 없습니다.'}), 400
         
         # DataFrame 생성
         df = pd.DataFrame(stocks)
         
-        # 필요한 컬럼만 선택하고 순서 지정
+        # 필요한 컬럼만 선택
         columns = ['code', 'name', 'current_price', 'intrinsic_value', 'safety_margin', 'treasury_ratio', 'dividend_yield', 'last_updated']
         df = df[columns]
-        
-        # 컬럼명 한글로 변경
         df.columns = ['종목코드', '종목명', '현재가', '내재가치', '안전마진', '자사주비율', '배당수익률', '마지막 업데이트']
         
         # 마지막 업데이트 시간을 한국 시간으로 변환
         df['마지막 업데이트'] = pd.to_datetime(df['마지막 업데이트']).dt.strftime('%Y-%m-%d %H:%M:%S')
         
+        # 숫자 포맷팅 적용
+        numeric_columns = ['현재가', '내재가치']
+        for col in numeric_columns:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda x: f"{x:,.0f}")
+        
+        # 소수점이 필요한 컬럼 포맷팅
+        decimal_columns = ['안전마진', '자사주비율', '배당수익률']
+        for col in decimal_columns:
+            if col in df.columns:
+                df[col] = df[col].apply(lambda x: f"{x:.2f}")
+        
         # 엑셀 파일 생성
         output = BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            df.to_excel(writer, index=False, sheet_name='안전마진 상위종목')
+            df.to_excel(writer, index=False, sheet_name=sheet_name)
+            
+            # 워크시트 가져오기
+            worksheet = writer.sheets[sheet_name]
+            
+            # 컬럼 너비 자동 조정
+            for idx, col in enumerate(df.columns):
+                max_length = max(
+                    df[col].astype(str).apply(len).max(),
+                    len(col)
+                )
+                worksheet.set_column(idx, idx, max_length + 2)
         
         output.seek(0)
-        
-        # 파일명에 배당수익률 필터 정보와 limit 정보 추가
-        filename = f'안전마진_상위{limit}종목'
-        if dividend_filter is not None:
-            filename += f'_배당수익률{dividend_filter}%이상'
-        filename += '.xlsx'
         
         return send_file(
             output,
@@ -274,7 +255,47 @@ def export_excel():
             download_name=filename
         )
     except Exception as e:
-        return str(e), 500
+        print(f"엑셀 내보내기 중 오류: {str(e)}")
+        return jsonify({'error': f'엑셀 내보내기 중 오류가 발생했습니다: {str(e)}'}), 500
+
+@app.route('/watchlist/data', methods=['POST'])
+def get_watchlist_data():
+    try:
+        data = request.get_json()
+        watchlist = data.get('watchlist', [])
+        print(f"Received watchlist request with {len(watchlist)} items")
+        
+        if not watchlist:
+            print("Watchlist is empty")
+            return jsonify([])
+            
+        stocks = []
+        for item in watchlist:
+            print(f"Processing stock: {item['code']}")
+            # all_safety_margin_results.json에서 직접 데이터 읽기
+            with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                stock = next((s for s in data if s['code'] == item['code']), None)
+                if stock:
+                    stock_data = {
+                        'code': stock['code'],
+                        'name': stock['name'],
+                        'current_price': stock['current_price'],
+                        'intrinsic_value': stock['intrinsic_value'],
+                        'safety_margin': stock['safety_margin'],
+                        'treasury_ratio': stock.get('treasury_ratio', None),
+                        'dividend_yield': stock.get('dividend_yield', None),
+                        'last_update': stock.get('last_updated', None)
+                    }
+                    stocks.append(stock_data)
+                else:
+                    print(f"Stock not found: {item['code']}")
+                
+        print(f"Returning {len(stocks)} stocks")
+        return jsonify(stocks)
+    except Exception as e:
+        print(f"Error in get_watchlist_data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
     # 백그라운드 업데이트 스레드 시작

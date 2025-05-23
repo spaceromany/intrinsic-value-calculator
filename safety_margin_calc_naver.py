@@ -10,14 +10,12 @@ import pandas as pd
 from datetime import datetime, timedelta
 import json
 import os
-import concurrent.futures
 from tqdm import tqdm
 import math
 from bs4 import BeautifulSoup
 
 # KRX 종목 목록 파일 경로
 KRX_STOCKS_FILE = 'krx_stocks.json'
-SAFETY_MARGIN_FILE = 'safety_margin_results.json'
 KRX_STOCKS = None
 
 def load_krx_stocks():
@@ -50,9 +48,6 @@ def load_krx_stocks():
     except Exception as e:
         print(f"KRX 종목 목록 다운로드 중 오류 발생: {e}")
         KRX_STOCKS = None
-
-# 프로그램 시작 시 KRX 종목 목록 로드
-load_krx_stocks()
 
 def get_stock_data(ticker: str) -> tuple:
     """
@@ -501,40 +496,18 @@ def analyze_all_stocks(limit: int = 30) -> list:
     
     return results[:limit]
 
-def get_top_safety_margin_stocks(limit: int = 30) -> list:
-    """
-    전체 종목에 대해 안전마진을 계산하고 상위 종목을 반환합니다.
-    캐시된 결과가 있으면 사용하고, 없거나 오래된 경우 새로 분석합니다.
-    
-    Args:
-        limit (int): 반환할 상위 종목 수 (기본값: 30)
-        
-    Returns:
-        list: 안전마진 기준 상위 종목 목록
-    """
-    # 새로 분석
-    results = analyze_all_stocks(limit)
-    
-    # 결과를 파일로 저장
-    try:
-        with open(SAFETY_MARGIN_FILE, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"안전마진 결과 저장 중 오류 발생: {e}")
-    
-    return results
 
 if __name__ == "__main__":
     # 테스트 코드
-    top_stocks = get_top_safety_margin_stocks()
+    top_stocks = analyze_all_stocks()
     
-    print("\n=== 안전마진 상위 종목 ===")
-    for idx, stock in enumerate(top_stocks, 1):
-        print(f"\n{idx}위: {stock['name']} ({stock['code']})")
-        print(f"현재가: {stock['current_price']:,.0f}원")
-        print(f"내재가치: {stock['intrinsic_value']:,.0f}원")
-        print(f"안전마진: {stock['safety_margin']:+.1f}%")
-        if stock['treasury_ratio'] > 0:
-            print(f"자사주비율: {stock['treasury_ratio']:.1f}%")
-        if stock['dividend_yield'] is not None:
-            print(f"배당수익률: {stock['dividend_yield']:.2f}%")
+#     print("\n=== 안전마진 상위 종목 ===")
+#     for idx, stock in enumerate(top_stocks, 1):
+#         print(f"\n{idx}위: {stock['name']} ({stock['code']})")
+#         print(f"현재가: {stock['current_price']:,.0f}원")
+#         print(f"내재가치: {stock['intrinsic_value']:,.0f}원")
+#         print(f"안전마진: {stock['safety_margin']:+.1f}%")
+#         if stock['treasury_ratio'] > 0:
+#             print(f"자사주비율: {stock['treasury_ratio']:.1f}%")
+#         if stock['dividend_yield'] is not None:
+#             print(f"배당수익률: {stock['dividend_yield']:.2f}%")
