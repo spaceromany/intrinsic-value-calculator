@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 import threading
 import time
+import json
 
 app = Flask(__name__)
 
@@ -12,26 +13,33 @@ def background_update():
     while True:
         try:
             print(f"[{datetime.now()}] 데이터 업데이트 시작...")
-            get_top_safety_margin_stocks(force_update=True)
+            get_top_safety_margin_stocks()
             print(f"[{datetime.now()}] 데이터 업데이트 완료")
         except Exception as e:
             print(f"[{datetime.now()}] 데이터 업데이트 중 오류 발생: {str(e)}")
         
         # 1시간 대기
-        time.sleep(3600)
+        time.sleep(3600*4)
 
 @app.route('/')
 def index():
-    # 상위 30개 종목 가져오기
-    top_stocks = get_top_safety_margin_stocks()
-    
-    # safety_margin_results.json 파일의 수정 시간을 마지막 업데이트 시간으로 사용
-    last_update = datetime.fromtimestamp(os.path.getmtime('safety_margin_results.json')).strftime("%Y-%m-%d %H:%M")
-    
-    return render_template('index.html', top_stocks=top_stocks, last_update=last_update)
+    try:
+        # JSON 파일에서 데이터 읽기
+        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+            results = json.load(f)
+        top_stocks = results[:30]  # 상위 30개만 선택
+        
+        # 마지막 업데이트 시간
+        last_update = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json')).strftime("%Y-%m-%d %H:%M")
+        
+        return render_template('index.html', top_stocks=top_stocks, last_update=last_update)
+        
+    except Exception as e:
+        print(f"데이터 로드 중 오류 발생: {str(e)}")
+        return render_template('index.html', top_stocks=[], last_update="오류 발생")
 
 @app.route('/search')
-def search():
+def search(): 
     query = request.args.get('query', '')
     if not query:
         return jsonify([])

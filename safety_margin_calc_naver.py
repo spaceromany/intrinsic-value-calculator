@@ -12,6 +12,7 @@ import json
 import os
 import concurrent.futures
 from tqdm import tqdm
+import math
 
 # KRX 종목 목록 파일 경로
 KRX_STOCKS_FILE = 'krx_stocks.json'
@@ -379,10 +380,16 @@ def analyze_stock_wrapper(args):
         print(f"종목 {code} 분석 중 오류 발생: {e}")
     return None
 
+def margin_key(x):
+    m = x['safety_margin']
+    # nan이면 아주 작은 값으로 치환해서 맨 뒤로 보내기
+    return float('-inf') if math.isnan(m) else m
+
 def analyze_all_stocks(limit: int = 30) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
     순차 처리 방식으로 변경하여 안정성을 높였습니다.
+    전체 결과는 all_safety_margin_results.json 파일에 저장됩니다.
     """
     if KRX_STOCKS is None:
         return []
@@ -414,8 +421,18 @@ def analyze_all_stocks(limit: int = 30) -> list:
         except Exception as e:
             print(f"\n종목 {code} ({name}) 분석 중 오류 발생: {e}")
     
-    # 안전마진 기준으로 정렬하고 상위 종목만 선택
-    results.sort(key=lambda x: x['safety_margin'], reverse=True)
+    # 안전마진 기준으로 정렬 (nan 값 처리)
+    results.sort(key=margin_key, reverse=True)
+    
+    # 전체 결과를 파일로 저장
+    try:
+        with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+        print(f"\n전체 {len(results)}개 종목의 분석 결과가 all_safety_margin_results.json 파일에 저장되었습니다.")
+    except Exception as e:
+        print(f"\n전체 결과 저장 중 오류 발생: {e}")
+    
+    # 상위 종목만 선택하여 반환
     top_stocks = results[:limit]
     
     print(f"\n분석 완료: {len(results)}개 종목 분석 성공")
@@ -423,29 +440,31 @@ def analyze_all_stocks(limit: int = 30) -> list:
     
     return top_stocks
 
-def get_top_safety_margin_stocks(limit: int = 30, force_update: bool = False) -> list:
+def get_top_safety_margin_stocks(limit: int = 30) -> list:
     """
     전체 종목에 대해 안전마진을 계산하고 상위 종목을 반환합니다.
     캐시된 결과가 있으면 사용하고, 없거나 오래된 경우 새로 분석합니다.
     
     Args:
         limit (int): 반환할 상위 종목 수 (기본값: 30)
-        force_update (bool): 캐시된 결과를 무시하고 새로 분석할지 여부
         
     Returns:
         list: 안전마진 기준 상위 종목 목록
     """
-    # 강제 업데이트가 아닌 경우 캐시된 결과 확인
-    if not force_update and os.path.exists(SAFETY_MARGIN_FILE):
+    # 캐시된 결과 확인
+    if os.path.exists('all_safety_margin_results.json'):
         # 파일의 수정 시간 확인
-        file_time = datetime.fromtimestamp(os.path.getmtime(SAFETY_MARGIN_FILE))
+        file_time = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json'))
         now = datetime.now()
         
         # 1시간이 지나지 않았다면 파일에서 로드
         if now - file_time < timedelta(hours=1):
             try:
-                with open(SAFETY_MARGIN_FILE, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+                    results = json.load(f)
+                # 안전마진 기준으로 정렬 (nan 값 처리)
+                results.sort(key=margin_key, reverse=True)
+                return results[:limit]
             except Exception as e:
                 print(f"안전마진 결과 파일 로드 중 오류 발생: {e}")
     
