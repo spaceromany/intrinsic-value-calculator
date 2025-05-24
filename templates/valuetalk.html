@@ -57,14 +57,23 @@
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
-                        <div class="input-group mb-3">
-                            <input type="text" id="stockSearchInput" class="form-control" placeholder="종목명을 입력하세요">
-                            <button class="btn btn-outline-secondary" type="button" onclick="searchStocks()">
-                                <i class="fas fa-search"></i>
-                            </button>
+                        <div id="stockSearchSection">
+                            <div class="input-group mb-3">
+                                <input type="text" id="stockSearchInput" class="form-control" placeholder="종목명을 입력하세요">
+                                <button class="btn btn-outline-secondary" type="button" onclick="searchStocks()">
+                                    <i class="fas fa-search"></i>
+                                </button>
+                            </div>
+                            <div id="stockSearchResults" class="list-group mb-3" style="display: none;"></div>
                         </div>
-                        <div id="stockSearchResults" class="list-group mb-3" style="display: none;"></div>
-                        <div id="selectedStocks" class="mb-3"></div>
+                        <div id="selectedStocks" class="mb-3">
+                            <div class="selected-stock" style="display: none;">
+                                <span class="stock-name"></span>
+                                <span class="remove-stock" onclick="removeSelectedStock()">
+                                    <i class="fas fa-times"></i>
+                                </span>
+                            </div>
+                        </div>
                         <div class="position-relative">
                             <textarea id="postContent" class="form-control mb-2" rows="3" 
                                       placeholder="무슨 생각을 하고 계신가요? (최대 280자)" 
@@ -157,17 +166,27 @@
         color: #0d6efd;
     }
     .selected-stock {
-        display: inline-block;
-        padding: 0.25rem 0.5rem;
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
         margin: 0.25rem;
-        background-color: #0d6efd;
-        color: white;
+        background-color: #e7f1ff;
+        color: #0d6efd;
         border-radius: 1rem;
         font-size: 0.875rem;
+        border: 1px solid #0d6efd;
+    }
+    .selected-stock .stock-name {
+        font-weight: 500;
     }
     .selected-stock .remove-stock {
-        margin-left: 0.5rem;
+        margin-left: 0.75rem;
         cursor: pointer;
+        color: #0d6efd;
+        opacity: 0.7;
+    }
+    .selected-stock .remove-stock:hover {
+        opacity: 1;
     }
     .comment-icon-wrapper {
         display: inline-block;
@@ -224,7 +243,7 @@
 </style>
 
 <script>
-let selectedStocks = new Set();
+let selectedStock = null;  // selectedStocks Set을 단일 변수로 변경
 
 // 디바운스 함수
 function debounce(func, wait) {
@@ -302,22 +321,28 @@ async function searchStocks() {
 
 function selectStock(stock) {
     const container = document.getElementById('selectedStocks');
-    container.innerHTML = `
-        <div class="selected-stock">
-            ${stock.name}
-            <span class="remove-stock" onclick="removeSelectedStock()">
-                <i class="fas fa-times"></i>
-            </span>
-        </div>
-    `;
-    selectedStocks.clear();
-    selectedStocks.add(stock.code);
+    const selectedStockDiv = container.querySelector('.selected-stock');
+    const stockNameSpan = selectedStockDiv.querySelector('.stock-name');
+    
+    // 검색 UI 숨기기
+    document.getElementById('stockSearchSection').style.display = 'none';
+    
+    // 선택된 종목 표시
+    selectedStockDiv.style.display = 'inline-flex';
+    stockNameSpan.textContent = stock.name;
+    selectedStock = stock;
 }
 
 function removeSelectedStock() {
     const container = document.getElementById('selectedStocks');
-    container.innerHTML = '';
-    selectedStocks.clear();
+    const selectedStockDiv = container.querySelector('.selected-stock');
+    selectedStockDiv.style.display = 'none';
+    selectedStock = null;
+    
+    // 검색 UI 다시 표시
+    document.getElementById('stockSearchSection').style.display = 'block';
+    document.getElementById('stockSearchInput').value = '';
+    document.getElementById('stockSearchResults').style.display = 'none';
 }
 
 // 익명 ID 관리 함수
@@ -370,15 +395,17 @@ document.getElementById('postModal').addEventListener('hidden.bs.modal', functio
     textarea.value = '';
     document.getElementById('charCount').textContent = '0';
     document.getElementById('charCount').style.color = '#6c757d';
-    selectedStocks.clear();
-    document.getElementById('selectedStocks').innerHTML = '';
+    selectedStock = null;
+    const selectedStockDiv = document.querySelector('.selected-stock');
+    selectedStockDiv.style.display = 'none';
+    document.getElementById('stockSearchSection').style.display = 'block';
     document.getElementById('stockSearchResults').style.display = 'none';
 });
 
 async function submitPost() {
     const content = document.getElementById('postContent').value.trim();
     
-    if (selectedStocks.size === 0) {
+    if (!selectedStock) {
         alert('종목을 선택해주세요.');
         return;
     }
@@ -402,7 +429,7 @@ async function submitPost() {
             },
             body: JSON.stringify({
                 content: content,
-                stocks: Array.from(selectedStocks),
+                stocks: [selectedStock.code],  // 단일 종목 코드를 배열로 전송
                 anonymous_id: anonymousId
             })
         });
@@ -415,8 +442,9 @@ async function submitPost() {
         document.getElementById('postContent').value = '';
         document.getElementById('charCount').textContent = '0';
         document.getElementById('charCount').style.color = '#6c757d';
-        selectedStocks.clear();
-        document.getElementById('selectedStocks').innerHTML = '';
+        selectedStock = null;
+        const selectedStockDiv = document.querySelector('.selected-stock');
+        selectedStockDiv.style.display = 'none';
         
         // 게시물 목록 새로고침
         await loadPosts();
