@@ -22,6 +22,15 @@
                           </ul>"
                    style="cursor: pointer; color: #6c757d;"></i>
             </h2>
+            <div class="d-flex align-items-center">
+                <div class="me-3">
+                    <small class="text-muted">내 익명 ID:</small>
+                    <span id="currentAnonymousId" class="fw-bold ms-2">로딩중...</span>
+                </div>
+                <button class="btn btn-outline-primary btn-sm" onclick="refreshAnonymousId()">
+                    <i class="fas fa-sync-alt"></i> 새로고침
+                </button>
+            </div>
         </div>
     </div>
 
@@ -32,6 +41,7 @@
             <div class="btn-group">
                 <button class="btn btn-outline-secondary active" data-filter="all" onclick="filterPosts('all')">전체</button>
                 <button class="btn btn-outline-secondary" data-filter="following" onclick="filterPosts('following')">관심종목</button>
+                <button class="btn btn-outline-secondary" data-filter="my" onclick="filterPosts('my')">나의 게시글</button>
             </div>
         </div>
         <div id="postsList">
@@ -305,7 +315,24 @@ function debounce(func, wait) {
     };
 }
 
-// 툴팁 초기화
+// 익명 ID 표시 함수
+async function displayAnonymousId() {
+    const anonymousId = await getAnonymousId();
+    const displayElement = document.getElementById('currentAnonymousId');
+    if (anonymousId) {
+        displayElement.textContent = anonymousId;
+    } else {
+        displayElement.textContent = 'ID를 가져올 수 없습니다';
+    }
+}
+
+// 익명 ID 새로고침 함수
+async function refreshAnonymousId() {
+    localStorage.removeItem('anonymousId');  // 기존 ID 제거
+    await displayAnonymousId();  // 새 ID 표시
+}
+
+// 페이지 로드 시 익명 ID 표시
 document.addEventListener('DOMContentLoaded', function() {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
     const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => {
@@ -330,6 +357,9 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // 초기 게시물 로드
     loadPosts();
+    
+    // 익명 ID 표시
+    displayAnonymousId();
 });
 
 async function searchStocks() {
@@ -579,7 +609,7 @@ function createPostElement(post) {
                     </span>
                 </div>
                 <div class="post-author text-muted">
-                    <small class="fw-bold">${post.anonymous_id}</small>
+                    <small class="fw-bold">From ${post.anonymous_id}</small>
                 </div>
             </div>
             
@@ -785,7 +815,6 @@ async function filterPosts(filter) {
             }
         });
         
-        // 관심종목 필터인 경우 로컬 스토리지에서 관심종목 가져오기
         let url = '/valuetalk/posts';
         if (filter === 'following') {
             const watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
@@ -795,6 +824,8 @@ async function filterPosts(filter) {
                 return;
             }
             url += `?filter=following&watchlist=${encodeURIComponent(JSON.stringify(watchlist))}`;
+        } else if (filter === 'my') {
+            url += '?filter=my';
         } else {
             url += `?filter=${filter}`;
         }
@@ -831,7 +862,7 @@ async function loadComments(postId) {
         const response = await fetch(`/valuetalk/post/${postId}/comments`);
         const comments = await response.json();
         
-        const commentsList = document.querySelector(`#comments-${post.id} .comments-list`);
+        const commentsList = document.querySelector(`#comments-${postId} .comments-list`);
         commentsList.innerHTML = '';
         
         // 댓글을 오래된 순으로 정렬 (최신 댓글이 아래에 표시되도록)
@@ -894,6 +925,7 @@ async function submitComment(postId) {
         if (response.ok) {
             input.value = '';
             await loadComments(postId);
+            await loadCommentCount(postId);  // 댓글 수 업데이트
         } else {
             const data = await response.json();
             throw new Error(data.error || '댓글 작성에 실패했습니다.');

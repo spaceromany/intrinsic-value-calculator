@@ -447,6 +447,9 @@ def get_posts():
             except Exception as e:
                 print(f"관심종목 필터링 중 오류 발생: {str(e)}")
                 return jsonify([])
+        elif filter_type == 'my':
+            # 현재 디바이스의 게시물만 필터링
+            result = query.eq('device_id', device_id).execute()
         else:
             result = query.execute()
         
