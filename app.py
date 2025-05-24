@@ -364,12 +364,15 @@ def create_post():
         if not device_id:
             return jsonify({'error': '디바이스 ID가 필요합니다.'}), 400
         
+        # 현재 시간을 한국 시간대로 저장
+        current_time = datetime.now().astimezone().isoformat()
+        
         # 게시물 생성
         post_data = {
             'content': content,
             'anonymous_id': anonymous_id,
             'device_id': device_id,
-            'created_at': datetime.now().isoformat(),
+            'created_at': current_time,
             'stocks': stocks
         }
         

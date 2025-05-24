@@ -114,15 +114,19 @@
     }
     .post-card {
         border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        margin-bottom: 1rem;
         transition: all 0.3s ease;
         cursor: pointer;
         height: 100%;
         display: flex;
         flex-direction: column;
+        background-color: #ffffff;
+        border-radius: 12px;
     }
     .post-card:hover {
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        transform: translateY(-2px);
     }
     .post-content {
         font-size: 1.1rem;
@@ -131,6 +135,7 @@
         white-space: pre-wrap;
         word-break: break-word;
         flex-grow: 1;
+        color: #2c3e50;
     }
     .post-content.collapsed {
         overflow: hidden;
@@ -138,33 +143,117 @@
         display: -webkit-box;
         -webkit-line-clamp: 2;
         -webkit-box-orient: vertical;
-        max-height: 3.2em; /* line-height * 2 */
+        max-height: 3.2em;
+    }
+    .post-stocks {
+        margin: 0;
+        padding: 0.5rem 0;
     }
     .stock-tag {
         display: inline-block;
-        padding: 0.25rem 0.5rem;
+        padding: 0.4rem 0.9rem;
         margin: 0.25rem;
-        background-color: #e9ecef;
+        background-color: #e7f1ff;
+        border: 1px solid #0d6efd;
         border-radius: 1rem;
-        font-size: 0.875rem;
-        color: #495057;
+        font-size: 0.95rem;
+        color: #0d6efd;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
     .stock-tag:hover {
-        background-color: #dee2e6;
+        background-color: #0d6efd;
+        color: white;
         text-decoration: none;
+        transform: translateY(-1px);
+    }
+    .post-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.75rem;
+        padding: 0.5rem 0;
+    }
+    .post-stocks {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .post-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .post-time {
+        font-size: 0.85rem;
+    }
+    .post-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 0.75rem;
+        padding-top: 0.75rem;
+        border-top: 1px solid #f0f0f0;
+    }
+    .post-author {
+        font-size: 0.9rem;
     }
     .post-actions {
-        color: #6c757d;
-        margin-top: 0.5rem;
-        padding-top: 0.5rem;
-        border-top: 1px solid #e9ecef;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
     }
     .post-actions i {
         cursor: pointer;
         transition: all 0.2s ease;
+        font-size: 1.1rem;
     }
     .post-actions i:hover {
         color: #0d6efd;
+        transform: scale(1.1);
+    }
+    .read-more {
+        color: #0d6efd;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 0.25rem;
+        background-color: #f8f9fa;
+        transition: all 0.2s ease;
+    }
+    .read-more:hover {
+        background-color: #e7f1ff;
+        text-decoration: none;
+    }
+    .card-body {
+        padding: 1.25rem;
+    }
+    .comments-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #f0f0f0;
+    }
+    .comment-item {
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        background-color: #f8f9fa;
+        margin-bottom: 0.5rem;
+        transition: all 0.2s ease;
+    }
+    .comment-item:hover {
+        background-color: #e9ecef;
+    }
+    .fa-trash-alt {
+        font-size: 0.9rem;
+        opacity: 0.7;
+        transition: all 0.2s ease;
+    }
+    .fa-trash-alt:hover {
+        opacity: 1;
+        color: #dc3545 !important;
+        transform: scale(1.1);
     }
     .selected-stock {
         display: inline-flex;
@@ -197,53 +286,6 @@
         font-size: 0.875rem;
         color: #6c757d;
         margin-left: 2px;
-    }
-    .fa-trash-alt:hover {
-        color: #dc3545 !important;
-    }
-    .post-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.5rem;
-    }
-    .post-meta {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .post-stocks {
-        margin: 0.5rem 0;
-    }
-    .comments-section {
-        margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid #e9ecef;
-    }
-    .comment-form {
-        margin-top: 1rem;
-    }
-    .comment-item {
-        padding: 0.5rem;
-        border-radius: 0.5rem;
-        background-color: #f8f9fa;
-    }
-    .comment-item:hover {
-        background-color: #e9ecef;
-    }
-    .read-more {
-        color: #0d6efd;
-        cursor: pointer;
-        font-size: 0.9rem;
-        margin-top: 0.5rem;
-        display: inline-block;
-        padding: 0.25rem 0.5rem;
-        border-radius: 0.25rem;
-        background-color: #f8f9fa;
-    }
-    .read-more:hover {
-        background-color: #e9ecef;
-        text-decoration: none;
     }
 </style>
 
@@ -499,41 +541,46 @@ function createPostElement(post) {
     div.className = 'card post-card';
     div.setAttribute('data-post-id', post.id);
     
-    // 내용이 2줄을 초과하는지 확인
     const contentClass = 'post-content collapsed';
     
     div.innerHTML = `
         <div class="card-body">
             <div class="post-header">
-                <div class="post-meta">
-                    <small class="text-muted fw-bold">${post.anonymous_id}</small>
-                    <small class="text-muted">${formatTime(post.created_at)}</small>
+                <div class="post-stocks">
+                    ${post.stocks.map(stock => `
+                        <span class="stock-tag" onclick="event.stopPropagation(); filterByStock('${stock.code}')">
+                            ${stock.name}
+                        </span>
+                    `).join('')}
                 </div>
-                ${post.is_owner ? `
-                    <i class="fas fa-trash-alt text-muted" style="cursor: pointer;" 
-                       onclick="event.stopPropagation(); showPostOptions('${post.id}')"></i>
-                ` : ''}
+                <div class="post-meta">
+                    ${post.is_owner ? `
+                        <i class="fas fa-trash-alt text-muted me-2" style="cursor: pointer;" 
+                           onclick="event.stopPropagation(); showPostOptions('${post.id}')"></i>
+                    ` : ''}
+                    <div class="post-time text-muted">
+                        <small>${formatTime(post.created_at)}</small>
+                    </div>
+                </div>
             </div>
             <div class="${contentClass}" id="content-${post.id}">${post.content}</div>
             <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')" style="display: none;">
                 더보기
             </span>
-            <div class="post-stocks">
-                ${post.stocks.map(stock => `
-                    <span class="stock-tag" onclick="event.stopPropagation(); filterByStock('${stock.code}')">
-                        ${stock.name}
+            <div class="post-footer">
+                <div class="post-actions">
+                    <span class="like-wrapper" onclick="event.stopPropagation(); likePost('${post.id}')">
+                        <i class="far fa-heart me-1" id="like-icon-${post.id}"></i>
+                        <span class="like-count" id="like-count-${post.id}">0</span>
                     </span>
-                `).join('')}
-            </div>
-            <div class="post-actions">
-                <span class="like-wrapper" onclick="event.stopPropagation(); likePost('${post.id}')">
-                    <i class="far fa-heart me-1" id="like-icon-${post.id}"></i>
-                    <span class="like-count" id="like-count-${post.id}">0</span>
-                </span>
-                <span class="comment-icon-wrapper ms-3" onclick="event.stopPropagation(); toggleComments('${post.id}')">
-                    <i class="far fa-comment me-1" id="comment-icon-${post.id}"></i>
-                    <span class="comment-count" id="comment-count-${post.id}"></span>
-                </span>
+                    <span class="comment-icon-wrapper ms-3" onclick="event.stopPropagation(); toggleComments('${post.id}')">
+                        <i class="far fa-comment me-1" id="comment-icon-${post.id}"></i>
+                        <span class="comment-count" id="comment-count-${post.id}"></span>
+                    </span>
+                </div>
+                <div class="post-author text-muted">
+                    <small class="fw-bold">${post.anonymous_id}</small>
+                </div>
             </div>
             
             <div id="comments-${post.id}" class="comments-section" style="display: none;">
@@ -679,20 +726,34 @@ async function likePost(postId) {
 }
 
 function formatTime(timestamp) {
-    if (!timestamp) return '시간 정보 없음';
+    if (!timestamp) return '';
     
-    // ISO 문자열을 Date 객체로 변환
+    // ISO 형식의 시간 문자열을 Date 객체로 변환
     const date = new Date(timestamp);
-    if (isNaN(date.getTime())) return '시간 정보 없음';
-    
-    // 현재 시간 (한국 시간)
     const now = new Date();
-    const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     
-    if (diffMins < 1) {
+    // 시간 차이 계산 (밀리초)
+    const diffMs = now.getTime() - date.getTime();
+    
+    // 미래 시간인 경우
+    if (diffMs < 0) {
+        return date.toLocaleString('ko-KR', {
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        }).replace(/\. /g, '년 ').replace('.', '월 ').replace('.', '일 ');
+    }
+    
+    // 과거 시간인 경우
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    
+    if (diffSecs < 60) {
         return '방금 전';
     } else if (diffMins < 60) {
         return `${diffMins}분 전`;
@@ -701,15 +762,14 @@ function formatTime(timestamp) {
     } else if (diffDays < 7) {
         return `${diffDays}일 전`;
     } else {
-        // 한국 시간으로 표시
         return date.toLocaleString('ko-KR', {
             year: 'numeric',
-            month: 'long',
-            day: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
             hour: '2-digit',
             minute: '2-digit',
-            timeZone: 'Asia/Seoul'
-        });
+            hour12: false
+        }).replace(/\. /g, '년 ').replace('.', '월 ').replace('.', '일 ');
     }
 }
 
