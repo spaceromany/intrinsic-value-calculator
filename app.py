@@ -332,23 +332,37 @@ def valuetalk():
     }
     return render_template('valuetalk.html', quote=quote)
 
+@app.route('/valuetalk/anonymous-id', methods=['POST'])
+def get_anonymous_id():
+    try:
+        device_id = get_device_id()
+        if not device_id:
+            return jsonify({'error': '디바이스 ID가 필요합니다.'}), 400
+        
+        anonymous_id = generate_anonymous_id(device_id)
+        return jsonify({'anonymous_id': anonymous_id})
+    except Exception as e:
+        print(f"익명 ID 발급 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/valuetalk/post', methods=['POST'])
 def create_post():
     try:
         data = request.get_json()
         content = data.get('content')
         stocks = data.get('stocks', [])
+        anonymous_id = data.get('anonymous_id')
         
         if not content or not stocks:
             return jsonify({'error': '내용과 종목 정보가 필요합니다.'}), 400
+        
+        if not anonymous_id:
+            return jsonify({'error': '익명 ID가 필요합니다.'}), 400
         
         # 디바이스 ID 가져오기
         device_id = get_device_id()
         if not device_id:
             return jsonify({'error': '디바이스 ID가 필요합니다.'}), 400
-        
-        # 익명 ID 생성
-        anonymous_id = generate_anonymous_id()
         
         # 게시물 생성
         post_data = {
@@ -356,10 +370,9 @@ def create_post():
             'anonymous_id': anonymous_id,
             'device_id': device_id,
             'created_at': datetime.now().isoformat(),
-            'stocks': stocks  # stocks 배열을 직접 저장
+            'stocks': stocks
         }
         
-        # 게시물 저장
         result = supabase.table('posts').insert(post_data).execute()
         if not result.data:
             return jsonify({'error': '게시물 저장에 실패했습니다.'}), 500
@@ -532,17 +545,11 @@ def get_comments(post_id):
 def create_comment(post_id):
     try:
         data = request.get_json()
-        if not data or 'content' not in data:
+        if not data or 'content' not in data or 'anonymous_id' not in data:
             return jsonify({'error': '필수 필드가 누락되었습니다.'}), 400
 
         device_id = get_device_id()
         
-        # 이전 댓글에서 익명 ID 가져오기
-        result = supabase.table('comments').select('anonymous_id').eq('device_id', device_id).order('created_at', desc=True).limit(1).execute()
-        
-        # 이전 익명 ID가 없으면 새로 생성
-        anonymous_id = result.data[0]['anonymous_id'] if result.data else generate_anonymous_id()
-
         # 현재 시간을 ISO 형식으로 저장
         current_time = datetime.now().astimezone().isoformat()
 
@@ -552,7 +559,7 @@ def create_comment(post_id):
             'created_at': current_time,
             'post_id': post_id,
             'device_id': device_id,
-            'anonymous_id': anonymous_id
+            'anonymous_id': data['anonymous_id']
         }
 
         # Supabase에 댓글 저장

@@ -235,13 +235,23 @@ function removeSelectedStock() {
     selectedStocks.clear();
 }
 
-// 익명 ID 관리 함수 추가
-function getAnonymousId() {
+// 익명 ID 관리 함수
+async function getAnonymousId() {
     let anonymousId = localStorage.getItem('anonymousId');
     if (!anonymousId) {
-        // 랜덤 문자열 생성 (8자리)
-        anonymousId = Math.random().toString(36).substring(2, 10);
-        localStorage.setItem('anonymousId', anonymousId);
+        // 서버에서 익명 ID 발급받기
+        try {
+            const response = await fetch('/valuetalk/anonymous-id', {
+                method: 'POST'
+            });
+            if (response.ok) {
+                const data = await response.json();
+                anonymousId = data.anonymous_id;
+                localStorage.setItem('anonymousId', anonymousId);
+            }
+        } catch (error) {
+            console.error('익명 ID 발급 중 오류:', error);
+        }
     }
     return anonymousId;
 }
@@ -260,6 +270,7 @@ async function submitPost() {
     }
 
     try {
+        const anonymousId = await getAnonymousId();
         const response = await fetch('/valuetalk/post', {
             method: 'POST',
             headers: {
@@ -267,7 +278,8 @@ async function submitPost() {
             },
             body: JSON.stringify({
                 content: content,
-                stocks: Array.from(selectedStocks)
+                stocks: Array.from(selectedStocks),
+                anonymous_id: anonymousId
             })
         });
 
@@ -629,23 +641,32 @@ async function submitComment(postId) {
     }
 
     try {
+        const anonymousId = await getAnonymousId();
+        if (!anonymousId) {
+            throw new Error('익명 ID를 가져오는데 실패했습니다.');
+        }
+
         const response = await fetch(`/valuetalk/post/${postId}/comment`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ content })
+            body: JSON.stringify({ 
+                content,
+                anonymous_id: anonymousId
+            })
         });
 
         if (response.ok) {
             input.value = '';
             await loadComments(postId);
         } else {
-            throw new Error('댓글 작성에 실패했습니다.');
+            const data = await response.json();
+            throw new Error(data.error || '댓글 작성에 실패했습니다.');
         }
     } catch (error) {
         console.error('댓글 작성 중 오류:', error);
-        alert('댓글 작성 중 오류가 발생했습니다.');
+        alert(error.message);
     }
 }
 

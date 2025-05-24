@@ -56,7 +56,7 @@ ALL_COMBINATIONS = list(product(ADJECTIVES, NAMES))
 # 조합 섞기
 random.shuffle(ALL_COMBINATIONS)
 
-def generate_anonymous_id():
+def generate_anonymous_id(device_id=None):
     """고유한 익명 ID 생성"""
     if not ALL_COMBINATIONS:
         # 모든 조합을 다 사용했다면 다시 섞기
