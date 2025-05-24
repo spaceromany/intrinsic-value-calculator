@@ -5,7 +5,34 @@
     <!-- 검색 섹션 -->
     <div class="bg-white rounded shadow-sm p-4 mb-4">
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
-            <h2 class="mb-0 fw-bold text-primary">내재가치 계산기</h2>
+            <h2 class="mb-0 fw-bold text-primary">
+                내재가치 계산기
+                <i class="fas fa-info-circle ms-2" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-html="true"
+                   data-bs-placement="right"
+                   title="<h5>내재가치 계산 방법</h5>
+                          <p>내재가치는 BPS와 EPS의 가중평균의 평균을 사용하여 계산됩니다.</p>
+                          <ul>
+                            <li><strong>EPS 가중평균 계산:</strong>
+                              <ul>
+                                <li>최근년도 EPS × 3</li>
+                                <li>전년도 EPS × 2</li>
+                                <li>전전년도 EPS × 1</li>
+                                <li>합계 ÷ 6</li>
+                              </ul>
+                            </li>
+                            <li><strong>BPS:</strong> 최근년도 BPS 사용</li>
+                            <li><strong>내재가치 = (EPS 가중평균 × 10 + BPS) ÷ 2</strong></li>
+                            <li><strong>자사주 조정:</strong>
+                              <ul>
+                                <li>자사주 비율이 있는 경우: 내재가치 × (100 ÷ (100 - 자사주비율))</li>
+                                <li>자사주가 없는 경우: 조정하지 않음</li>
+                              </ul>
+                            </li>
+                          </ul>"
+                   style="cursor: pointer; color: #6c757d;"></i>
+            </h2>
         </div>
         
         <div class="row g-3">
@@ -178,7 +205,17 @@ function debounce(func, wait) {
     };
 }
 
+// 툴팁 초기화
 document.addEventListener('DOMContentLoaded', function() {
+    // Bootstrap 툴팁 초기화
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            html: true,
+            trigger: 'hover'
+        });
+    });
+    
     // Enter 키 이벤트 리스너 추가
     document.getElementById('searchInput').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
@@ -263,7 +300,7 @@ async function searchStocks() {
             const col = document.createElement('div');
             col.className = 'col-12 col-sm-6 col-md-4';
             col.innerHTML = `
-                <div class="card stock-card" onclick="toggleDetails('${stock.code}')">
+                <div class="card stock-card" onclick="toggleDetails('${stock.code}', event)">
                     <div class="card-body position-relative">
                         <div class="heart-icon" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">
                             <i class="${isInWatchlist ? 'fas' : 'far'} fa-heart" 
@@ -309,9 +346,13 @@ async function searchStocks() {
     }
 }
 
-function toggleDetails(code) {
-    const details = document.getElementById(`details-${code}`);
-    details.classList.toggle('show');
+function toggleDetails(code, event) {
+    // 클릭된 카드의 상세 정보만 토글
+    const clickedCard = event.currentTarget;
+    const detailsElement = clickedCard.querySelector('.stock-details');
+    if (detailsElement) {
+        detailsElement.classList.toggle('show');
+    }
 }
 
 function toggleWatchlist(code) {
@@ -386,7 +427,7 @@ async function loadWatchlist() {
             
             return `
                 <div class="col-12 col-md-6 col-lg-4 mb-4">
-                    <div class="card h-100 stock-card" onclick="toggleDetails('${stock.code}')">
+                    <div class="card h-100 stock-card" onclick="toggleDetails('${stock.code}', event)">
                         <div class="card-body">
                             <div class="d-flex align-items-center mb-2">
                                 <div class="heart-icon me-3" style="cursor: pointer;" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">

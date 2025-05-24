@@ -13,7 +13,7 @@ import os
 from tqdm import tqdm
 import math
 from bs4 import BeautifulSoup
-
+import time
 # KRX 종목 목록 파일 경로
 KRX_STOCKS_FILE = 'krx_stocks.json'
 KRX_STOCKS = None
@@ -410,9 +410,10 @@ def analyze_all_stocks(limit: int = 30) -> list:
     각 종목별로 마지막 업데이트 시간을 저장하고,
     4시간이 지나지 않은 종목은 건너뜁니다.
     """
+
     if KRX_STOCKS is None:
         return []
-        
+    
     total_stocks = len(KRX_STOCKS)
     print(f"\n전체 {total_stocks}개 종목 분석 시작...")
     
@@ -433,7 +434,7 @@ def analyze_all_stocks(limit: int = 30) -> list:
     current_time = datetime.now()
     skipped_count = 0
     
-    for i, (code, name) in enumerate(tqdm(stock_list, desc="종목 분석 중")):
+    for i, (code, name) in enumerate(stock_list):
         # 기존 결과에서 해당 종목 찾기
         existing_stock = next((item for item in results if item['code'] == code), None)
         
@@ -446,6 +447,7 @@ def analyze_all_stocks(limit: int = 30) -> list:
         
         try:
             result = analyze_stock(code)
+            time.sleep(0.2)
             if not result.get('error') and result.get('safety_margin') is not None:
                 stock_data = {
                     'code': code,
@@ -474,7 +476,6 @@ def analyze_all_stocks(limit: int = 30) -> list:
                     with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
                         json.dump(results, f, ensure_ascii=False, indent=2)
                     print(f"\n{i + 1}/{total_stocks} 종목 분석 완료")
-                    print(f"현재까지 {len(results)}개 종목 분석 성공")
                     # print(f"건너뛴 종목 수: {skipped_count}")
                     
         except Exception as e:

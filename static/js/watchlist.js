@@ -103,7 +103,7 @@ class WatchlistManager {
             
             return `
                 <div class="col-12 mb-2">
-                    <div class="card">
+                    <div class="card stock-card" onclick="toggleDetails('${stock.code}', event)">
                         <div class="card-body p-3">
                             <div class="d-flex align-items-center mb-2">
                                 <div class="heart-icon me-3" style="cursor: pointer;" onclick="event.stopPropagation(); window.watchlistManager.removeFromWatchlist('${stock.code}')">
@@ -111,38 +111,38 @@ class WatchlistManager {
                                 </div>
                                 <h6 class="card-title mb-0">${stock.name} (${stock.code})</h6>
                             </div>
-                            <div class="stock-details d-flex flex-wrap" style="gap: 1rem;">
-                                <div class="text-end" style="min-width: 100px;">
-                                    <small class="text-muted d-block">매입가</small>
-                                    <span class="fw-bold">${Math.round(stock.purchase_price).toLocaleString()}원</span>
+                            <div class="stock-details">
+                                <div class="detail-item">
+                                    <span class="detail-label">매입가</span>
+                                    <span class="detail-value">${Math.round(stock.purchase_price).toLocaleString()}원</span>
                                 </div>
-                                <div class="text-end" style="min-width: 80px;">
-                                    <small class="text-muted d-block">매입수량</small>
-                                    <span class="fw-bold">${stock.purchase_quantity.toLocaleString()}주</span>
+                                <div class="detail-item">
+                                    <span class="detail-label">매입수량</span>
+                                    <span class="detail-value">${stock.purchase_quantity.toLocaleString()}주</span>
                                 </div>
-                                <div class="text-end" style="min-width: 100px;">
-                                    <small class="text-muted d-block">현재가</small>
-                                    <span class="fw-bold">${Math.round(stock.current_price).toLocaleString()}원</span>
+                                <div class="detail-item">
+                                    <span class="detail-label">현재가</span>
+                                    <span class="detail-value">${Math.round(stock.current_price).toLocaleString()}원</span>
                                 </div>
-                                <div class="text-end" style="min-width: 80px;">
-                                    <small class="text-muted d-block">수익률</small>
-                                    <span class="fw-bold ${returnClass}">${returnRate.toFixed(2)}%</span>
+                                <div class="detail-item">
+                                    <span class="detail-label">수익률</span>
+                                    <span class="detail-value ${returnClass}">${returnRate.toFixed(2)}%</span>
                                 </div>
-                                <div class="text-end" style="min-width: 100px;">
-                                    <small class="text-muted d-block">총 평가금액</small>
-                                    <span class="fw-bold">${totalValue.toLocaleString()}원</span>
+                                <div class="detail-item">
+                                    <span class="detail-label">총 평가금액</span>
+                                    <span class="detail-value">${totalValue.toLocaleString()}원</span>
                                 </div>
-                                <div class="text-end" style="min-width: 100px;">
-                                    <small class="text-muted d-block">내재가치</small>
-                                    <span class="fw-bold">${Math.round(stock.intrinsic_value).toLocaleString()}원</span>
+                                <div class="detail-item">
+                                    <span class="detail-label">내재가치</span>
+                                    <span class="detail-value">${Math.round(stock.intrinsic_value).toLocaleString()}원</span>
                                 </div>
-                                <div class="text-end" style="min-width: 80px;">
-                                    <small class="text-muted d-block">안전마진</small>
-                                    <span class="fw-bold">${Math.round(stock.safety_margin)}%</span>
+                                <div class="detail-item">
+                                    <span class="detail-label">안전마진</span>
+                                    <span class="detail-value">${Math.round(stock.safety_margin)}%</span>
                                 </div>
-                                <div class="text-end" style="min-width: 80px;">
-                                    <small class="text-muted d-block">배당수익률</small>
-                                    <span class="fw-bold">${stock.dividend_yield.toFixed(2)}%</span>
+                                <div class="detail-item">
+                                    <span class="detail-label">배당수익률</span>
+                                    <span class="detail-value">${stock.dividend_yield.toFixed(2)}%</span>
                                 </div>
                             </div>
                         </div>

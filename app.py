@@ -27,12 +27,12 @@ def background_update():
     while True:
         try:
             print(f"[{datetime.now()}] 데이터 업데이트 시작...")
+            load_krx_stocks()
             analyze_all_stocks()
             print(f"[{datetime.now()}] 데이터 업데이트 완료")
         except Exception as e:
             print(f"[{datetime.now()}] 데이터 업데이트 중 오류 발생: {str(e)}")
         
-        load_krx_stocks()
         # 4시간 대기
         time.sleep(3600*4)
 
@@ -303,4 +303,4 @@ if __name__ == '__main__':
     update_thread.start()
     
     # Flask 앱 실행
-    app.run(host='0.0.0.0', port=7777, debug=True) 
+    app.run(host='0.0.0.0', port=7777, debug=False) 
