@@ -1,0 +1,716 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+
+    <!-- 가치톡! 헤더 -->
+    <div class="bg-white rounded shadow-sm p-4 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <h2 class="mb-0 fw-bold text-primary">
+                가치톡!
+                <i class="fas fa-info-circle ms-2" 
+                   data-bs-toggle="tooltip" 
+                   data-bs-html="true"
+                   data-bs-placement="right"
+                   title="<h5>가치톡! 이용방법</h5>
+                          <p>가치톡!은 주식 투자자들을 위한 익명 커뮤니티입니다.</p>
+                          <ul>
+                            <li>게시물 작성 시 반드시 종목을 태그해야 합니다</li>
+                            <li>완전한 익명성을 보장합니다</li>
+                            <li>회원가입이 필요하지 않습니다</li>
+                            <li>부적절한 내용은 자동으로 필터링됩니다</li>
+                          </ul>"
+                   style="cursor: pointer; color: #6c757d;"></i>
+            </h2>
+        </div>
+    </div>
+
+    <!-- 게시물 목록 섹션 -->
+    <div id="postsContainer" class="bg-white rounded shadow-sm p-4">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h3 class="mb-0">최근 게시물</h3>
+            <div class="btn-group">
+                <button class="btn btn-outline-secondary active" data-filter="all" onclick="filterPosts('all')">전체</button>
+                <button class="btn btn-outline-secondary" data-filter="following" onclick="filterPosts('following')">관심종목</button>
+            </div>
+        </div>
+        <div id="postsList">
+            <!-- 게시물이 여기에 동적으로 로드됩니다 -->
+        </div>
+    </div>
+
+    <!-- 플로팅 액션 버튼 -->
+    <button class="btn btn-primary rounded-circle position-fixed" 
+            style="bottom: 2rem; right: 2rem; width: 3.5rem; height: 3.5rem; box-shadow: 0 2px 5px rgba(0,0,0,0.2);"
+            data-bs-toggle="modal" 
+            data-bs-target="#postModal">
+        <i class="fas fa-plus"></i>
+    </button>
+
+    <!-- 게시물 작성 모달 -->
+    <div class="modal fade" id="postModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">새 게시물 작성</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <div class="input-group mb-3">
+                            <input type="text" id="stockSearchInput" class="form-control" placeholder="종목명을 입력하세요">
+                            <button class="btn btn-outline-secondary" type="button" onclick="searchStocks()">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </div>
+                        <div id="stockSearchResults" class="list-group mb-3" style="display: none;"></div>
+                        <div id="selectedStocks" class="mb-3"></div>
+                        <textarea id="postContent" class="form-control mb-3" rows="3" placeholder="무슨 생각을 하고 계신가요?"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-primary" onclick="submitPost()">게시하기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .post-card {
+        border: none;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        margin-bottom: 1rem;
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    .post-card:hover {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .stock-tag {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        margin: 0.25rem;
+        background-color: #e9ecef;
+        border-radius: 1rem;
+        font-size: 0.875rem;
+        color: #495057;
+    }
+    .stock-tag:hover {
+        background-color: #dee2e6;
+        text-decoration: none;
+    }
+    .post-actions {
+        color: #6c757d;
+    }
+    .post-actions i {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .post-actions i:hover {
+        color: #0d6efd;
+    }
+    .selected-stock {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        margin: 0.25rem;
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 1rem;
+        font-size: 0.875rem;
+    }
+    .selected-stock .remove-stock {
+        margin-left: 0.5rem;
+        cursor: pointer;
+    }
+    .comment-icon-wrapper {
+        display: inline-block;
+        cursor: pointer;
+    }
+    .comment-count {
+        font-size: 0.875rem;
+        color: #6c757d;
+        margin-left: 2px;
+    }
+    .fa-trash-alt:hover {
+        color: #dc3545 !important;
+    }
+</style>
+
+<script>
+let selectedStocks = new Set();
+
+// 디바운스 함수
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// 툴팁 초기화
+document.addEventListener('DOMContentLoaded', function() {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            html: true,
+            trigger: 'hover'
+        });
+    });
+
+    // 실시간 검색을 위한 이벤트 리스너
+    const searchInput = document.getElementById('stockSearchInput');
+    const debouncedSearch = debounce(() => {
+        const query = searchInput.value.trim();
+        if (query.length >= 2) {
+            searchStocks();
+        } else {
+            document.getElementById('stockSearchResults').style.display = 'none';
+        }
+    }, 300);
+
+    searchInput.addEventListener('input', debouncedSearch);
+    
+    // 초기 게시물 로드
+    loadPosts();
+});
+
+async function searchStocks() {
+    const query = document.getElementById('stockSearchInput').value.trim();
+    if (!query) return;
+
+    try {
+        const response = await fetch(`/search?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        
+        const resultsDiv = document.getElementById('stockSearchResults');
+        resultsDiv.innerHTML = '';
+        
+        if (data.stocks && data.stocks.length > 0) {
+            data.stocks.forEach(stock => {
+                const item = document.createElement('a');
+                item.href = '#';
+                item.className = 'list-group-item list-group-item-action';
+                item.innerHTML = `${stock.name} (${stock.code})`;
+                item.onclick = (e) => {
+                    e.preventDefault();
+                    selectStock(stock);
+                    document.getElementById('stockSearchInput').value = '';
+                    resultsDiv.style.display = 'none';
+                };
+                resultsDiv.appendChild(item);
+            });
+            resultsDiv.style.display = 'block';
+        } else {
+            resultsDiv.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('검색 중 오류:', error);
+    }
+}
+
+function selectStock(stock) {
+    const container = document.getElementById('selectedStocks');
+    container.innerHTML = `
+        <div class="selected-stock">
+            ${stock.name}
+            <span class="remove-stock" onclick="removeSelectedStock()">
+                <i class="fas fa-times"></i>
+            </span>
+        </div>
+    `;
+    selectedStocks.clear();
+    selectedStocks.add(stock.code);
+}
+
+function removeSelectedStock() {
+    const container = document.getElementById('selectedStocks');
+    container.innerHTML = '';
+    selectedStocks.clear();
+}
+
+// 익명 ID 관리 함수 추가
+function getAnonymousId() {
+    let anonymousId = localStorage.getItem('anonymousId');
+    if (!anonymousId) {
+        // 랜덤 문자열 생성 (8자리)
+        anonymousId = Math.random().toString(36).substring(2, 10);
+        localStorage.setItem('anonymousId', anonymousId);
+    }
+    return anonymousId;
+}
+
+async function submitPost() {
+    const content = document.getElementById('postContent').value.trim();
+    
+    if (selectedStocks.size === 0) {
+        alert('종목을 선택해주세요.');
+        return;
+    }
+    
+    if (!content) {
+        alert('내용을 입력해주세요.');
+        return;
+    }
+
+    try {
+        const response = await fetch('/valuetalk/post', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: content,
+                stocks: Array.from(selectedStocks)
+            })
+        });
+
+        // 모달 닫기
+        const modal = bootstrap.Modal.getInstance(document.getElementById('postModal'));
+        modal.hide();
+        
+        // 폼 초기화
+        document.getElementById('postContent').value = '';
+        selectedStocks.clear();
+        document.getElementById('selectedStocks').innerHTML = '';
+        
+        // 게시물 목록 새로고침
+        await loadPosts();
+
+        // 응답이 실패한 경우에만 에러 메시지 표시
+        if (!response.ok) {
+            const data = await response.json();
+            console.error('게시물 작성 중 오류:', data);
+        }
+    } catch (error) {
+        console.error('게시물 작성 중 오류:', error);
+    }
+}
+
+async function loadPosts(filter = 'all') {
+    try {
+        const response = await fetch(`/valuetalk/posts?filter=${filter}`);
+        const posts = await response.json();
+        displayPosts(posts);
+    } catch (error) {
+        console.error('게시물 로드 중 오류:', error);
+    }
+}
+
+function displayPosts(posts) {
+    const container = document.getElementById('postsList');
+    container.innerHTML = '';
+    
+    if (posts.length === 0) {
+        container.innerHTML = '<div class="text-center text-muted py-4">게시물이 없습니다.</div>';
+        return;
+    }
+    
+    posts.forEach(post => {
+        const postElement = createPostElement(post);
+        container.appendChild(postElement);
+    });
+}
+
+function createPostElement(post) {
+    const div = document.createElement('div');
+    div.className = 'card post-card';
+    div.setAttribute('data-post-id', post.id);
+    div.innerHTML = `
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <small class="text-muted fw-bold">${post.anonymous_id}</small>
+                <div class="d-flex align-items-center">
+                    <small class="text-muted me-2">${formatTime(post.created_at)}</small>
+                    ${post.is_owner ? `
+                        <i class="fas fa-trash-alt text-muted" style="cursor: pointer;" 
+                           onclick="event.stopPropagation(); showPostOptions('${post.id}')"></i>
+                    ` : ''}
+                </div>
+            </div>
+            <p class="card-text">${post.content}</p>
+            <div class="mb-2">
+                ${post.stocks.map(stock => `
+                    <span class="stock-tag" onclick="event.stopPropagation(); filterByStock('${stock.code}')">
+                        ${stock.name}
+                    </span>
+                `).join('')}
+            </div>
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="post-actions">
+                    <span class="like-wrapper" onclick="event.stopPropagation(); likePost('${post.id}')">
+                        <i class="far fa-heart me-1" id="like-icon-${post.id}"></i>
+                        <span class="like-count" id="like-count-${post.id}">0</span>
+                    </span>
+                    <span class="comment-icon-wrapper ms-3" onclick="event.stopPropagation(); toggleComments('${post.id}')">
+                        <i class="far fa-comment me-1" id="comment-icon-${post.id}"></i>
+                        <span class="comment-count" id="comment-count-${post.id}"></span>
+                    </span>
+                </div>
+            </div>
+            
+            <!-- 댓글 섹션 -->
+            <div id="comments-${post.id}" class="mt-3" style="display: none;">
+                <div class="comments-list mb-3"></div>
+                <div class="comment-form">
+                    <div class="input-group">
+                        <input type="text" class="form-control" placeholder="댓글을 입력하세요..." 
+                               id="comment-input-${post.id}">
+                        <button class="btn btn-outline-primary" onclick="event.stopPropagation(); submitComment('${post.id}')">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // 카드 클릭 이벤트 추가
+    div.addEventListener('click', function(e) {
+        // 댓글 섹션이나 댓글 입력 영역을 클릭한 경우 이벤트 중단
+        if (e.target.closest('.comment-form') || e.target.closest('.comments-list')) {
+            return;
+        }
+        
+        // 이미 댓글이 표시되어 있는 경우 토글
+        const commentsSection = document.getElementById(`comments-${post.id}`);
+        if (commentsSection.style.display === 'block') {
+            commentsSection.style.display = 'none';
+        } else {
+            commentsSection.style.display = 'block';
+            loadComments(post.id);
+        }
+    });
+
+    // 댓글 수와 좋아요 정보 로드
+    loadCommentCount(post.id);
+    loadLikeInfo(post.id);
+    return div;
+}
+
+async function loadCommentCount(postId) {
+    try {
+        const response = await fetch(`/valuetalk/post/${postId}/comments`);
+        const comments = await response.json();
+        const count = comments.length;
+        
+        const countElement = document.getElementById(`comment-count-${postId}`);
+        const iconElement = document.getElementById(`comment-icon-${postId}`);
+        
+        if (count > 0) {
+            countElement.textContent = count;
+            countElement.style.display = 'inline';
+            iconElement.classList.remove('far');
+            iconElement.classList.add('fas');
+            iconElement.style.color = '#0d6efd';
+        } else {
+            countElement.style.display = 'none';
+            iconElement.classList.remove('fas');
+            iconElement.classList.add('far');
+            iconElement.style.color = '';
+        }
+    } catch (error) {
+        console.error('댓글 수 로드 중 오류:', error);
+    }
+}
+
+async function loadLikeInfo(postId) {
+    try {
+        const response = await fetch(`/valuetalk/post/${postId}/likes`);
+        const data = await response.json();
+        
+        const countElement = document.getElementById(`like-count-${postId}`);
+        const iconElement = document.getElementById(`like-icon-${postId}`);
+        
+        countElement.textContent = data.count;
+        
+        if (data.is_liked) {
+            // 아이콘 클래스 완전히 교체
+            iconElement.className = 'fas fa-heart me-1';
+            iconElement.style.color = '#dc3545';
+        } else {
+            // 아이콘 클래스 완전히 교체
+            iconElement.className = 'far fa-heart me-1';
+            iconElement.style.color = '';
+        }
+    } catch (error) {
+        console.error('좋아요 정보 로드 중 오류:', error);
+    }
+}
+
+// 좋아요 버튼 스타일 추가
+const style = document.createElement('style');
+style.textContent = `
+    .like-wrapper {
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        padding: 4px 8px;
+        border-radius: 4px;
+        transition: all 0.2s ease;
+    }
+    .like-wrapper:hover {
+        background-color: rgba(220, 53, 69, 0.1);
+    }
+    .like-wrapper i {
+        font-size: 1.1rem;
+        transition: all 0.2s ease;
+    }
+    .like-wrapper .like-count {
+        font-size: 0.9rem;
+        margin-left: 4px;
+        color: #6c757d;
+    }
+    .like-wrapper:hover i {
+        transform: scale(1.1);
+    }
+`;
+document.head.appendChild(style);
+
+async function likePost(postId) {
+    try {
+        const response = await fetch(`/valuetalk/post/${postId}/like`, {
+            method: 'POST'
+        });
+        
+        if (!response.ok) {
+            throw new Error('좋아요 처리에 실패했습니다.');
+        }
+        
+        const data = await response.json();
+        await loadLikeInfo(postId);
+        
+    } catch (error) {
+        console.error('좋아요 처리 중 오류:', error);
+        alert(error.message);
+    }
+}
+
+function formatTime(timestamp) {
+    if (!timestamp) return '시간 정보 없음';
+    
+    // ISO 문자열을 Date 객체로 변환
+    const date = new Date(timestamp);
+    if (isNaN(date.getTime())) return '시간 정보 없음';
+    
+    // 현재 시간 (한국 시간)
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 1) {
+        return '방금 전';
+    } else if (diffMins < 60) {
+        return `${diffMins}분 전`;
+    } else if (diffHours < 24) {
+        return `${diffHours}시간 전`;
+    } else if (diffDays < 7) {
+        return `${diffDays}일 전`;
+    } else {
+        // 한국 시간으로 표시
+        return date.toLocaleString('ko-KR', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: 'Asia/Seoul'
+        });
+    }
+}
+
+async function filterPosts(filter) {
+    try {
+        // 버튼 상태 업데이트
+        const buttons = document.querySelectorAll('.btn-group .btn');
+        buttons.forEach(btn => {
+            if (btn.getAttribute('data-filter') === filter) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+        
+        // 관심종목 필터인 경우 로컬 스토리지에서 관심종목 가져오기
+        let url = '/valuetalk/posts';
+        if (filter === 'following') {
+            const watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
+            if (watchlist.length === 0) {
+                alert('관심종목이 없습니다.');
+                document.querySelector('[data-filter="all"]').click();
+                return;
+            }
+            url += `?filter=following&watchlist=${encodeURIComponent(JSON.stringify(watchlist))}`;
+        } else {
+            url += `?filter=${filter}`;
+        }
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error('게시물을 불러오는데 실패했습니다.');
+        }
+        
+        const posts = await response.json();
+        displayPosts(posts);
+    } catch (error) {
+        console.error('게시물 필터링 중 오류:', error);
+        alert(error.message);
+    }
+}
+
+function filterByStock(code) {
+    // TODO: 특정 종목으로 필터링 구현
+}
+
+async function toggleComments(postId) {
+    const commentsSection = document.getElementById(`comments-${postId}`);
+    if (commentsSection.style.display === 'none') {
+        commentsSection.style.display = 'block';
+        await loadComments(postId);
+    } else {
+        commentsSection.style.display = 'none';
+    }
+}
+
+async function loadComments(postId) {
+    try {
+        const response = await fetch(`/valuetalk/post/${postId}/comments`);
+        const comments = await response.json();
+        
+        const commentsList = document.querySelector(`#comments-${postId} .comments-list`);
+        commentsList.innerHTML = '';
+        
+        // 댓글을 오래된 순으로 정렬 (최신 댓글이 아래에 표시되도록)
+        comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+        
+        comments.forEach(comment => {
+            const commentElement = createCommentElement(comment);
+            commentsList.appendChild(commentElement);
+        });
+    } catch (error) {
+        console.error('댓글 로드 중 오류:', error);
+    }
+}
+
+function createCommentElement(comment) {
+    const div = document.createElement('div');
+    div.className = 'comment-item mb-2';
+    div.innerHTML = `
+        <div class="d-flex justify-content-between align-items-start">
+            <small class="text-muted fw-bold">${comment.anonymous_id}</small>
+            <div class="d-flex align-items-center">
+                <small class="text-muted me-2">${formatTime(comment.created_at)}</small>
+                ${comment.is_owner ? `
+                    <i class="fas fa-ellipsis-v text-muted" style="cursor: pointer;" 
+                       onclick="showCommentOptions('${comment.id}')"></i>
+                ` : ''}
+            </div>
+        </div>
+        <p class="mb-1">${comment.content}</p>
+    `;
+    return div;
+}
+
+async function submitComment(postId) {
+    const input = document.getElementById(`comment-input-${postId}`);
+    const content = input.value.trim();
+    
+    if (!content) {
+        alert('댓글 내용을 입력해주세요.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/valuetalk/post/${postId}/comment`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ content })
+        });
+
+        if (response.ok) {
+            input.value = '';
+            await loadComments(postId);
+        } else {
+            throw new Error('댓글 작성에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('댓글 작성 중 오류:', error);
+        alert('댓글 작성 중 오류가 발생했습니다.');
+    }
+}
+
+function showCommentOptions(commentId) {
+    if (confirm('이 댓글을 삭제하시겠습니까?')) {
+        deleteComment(commentId);
+    }
+}
+
+async function deleteComment(commentId) {
+    try {
+        const response = await fetch(`/valuetalk/comment/${commentId}`, {
+            method: 'DELETE'
+        });
+
+        if (response.ok) {
+            // 댓글 목록 새로고침
+            const postId = document.querySelector(`[data-comment-id="${commentId}"]`).closest('.post-card').dataset.postId;
+            await loadComments(postId);
+        } else {
+            const data = await response.json();
+            alert(data.error || '댓글 삭제에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('댓글 삭제 중 오류:', error);
+        alert('댓글 삭제 중 오류가 발생했습니다.');
+    }
+}
+
+function showPostOptions(postId) {
+    if (confirm('이 게시물을 삭제하시겠습니까?')) {
+        deletePost(postId);
+    }
+}
+
+async function deletePost(postId) {
+    try {
+        console.log('Attempting to delete post:', postId);
+        const response = await fetch(`/valuetalk/post/${postId}`, {
+            method: 'DELETE'
+        });
+
+        const data = await response.json();
+        console.log('Delete response:', data);
+
+        if (response.ok) {
+            console.log('Post deleted successfully');
+            // 게시물 목록 새로고침
+            loadPosts();
+        } else {
+            console.error('Delete failed:', data.error);
+            alert(data.error || '게시물 삭제에 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('게시물 삭제 중 오류:', error);
+        alert('게시물 삭제 중 오류가 발생했습니다.');
+    }
+}
+
+// 모달이 닫힐 때 폼 초기화
+document.getElementById('postModal').addEventListener('hidden.bs.modal', function () {
+    document.getElementById('postContent').value = '';
+    selectedStocks.clear();
+    document.getElementById('selectedStocks').innerHTML = '';
+    document.getElementById('stockSearchResults').style.display = 'none';
+});
+</script>
+{% endblock %} 

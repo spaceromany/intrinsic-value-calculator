@@ -9,8 +9,32 @@ import pandas as pd
 import math
 from io import BytesIO
 import random
+from supabase import create_client, Client
+from dotenv import load_dotenv
+import hashlib
+import uuid
+from anonymous_ids import generate_anonymous_id
+# from chatbot import StockChatbot
+# Load environment variables
+load_dotenv()
 
 app = Flask(__name__)
+
+# Supabase 설정
+supabase: Client = create_client(
+    os.getenv('SUPABASE_URL'),
+    os.getenv('SUPABASE_KEY')
+)
+
+# StockChatbot 인스턴스 생성
+# stock_chatbot = StockChatbot(supabase)
+
+def get_device_id():
+    """디바이스 ID 생성 또는 가져오기"""
+    device_id = request.cookies.get('device_id')
+    if not device_id:
+        device_id = str(uuid.uuid4())
+    return device_id
 
 # 격언 데이터 로드
 def load_quotes():
@@ -295,6 +319,322 @@ def get_watchlist_data():
         return jsonify(stocks)
     except Exception as e:
         print(f"Error in get_watchlist_data: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk')
+def valuetalk():
+    quotes = load_quotes()
+    quote = random.choice(quotes) if quotes else {
+        'quote': '격언을 불러올 수 없습니다.',
+        'author': '',
+        'source': '',
+        'original': ''
+    }
+    return render_template('valuetalk.html', quote=quote)
+
+@app.route('/valuetalk/post', methods=['POST'])
+def create_post():
+    try:
+        data = request.get_json()
+        content = data.get('content')
+        stocks = data.get('stocks', [])
+        
+        if not content or not stocks:
+            return jsonify({'error': '내용과 종목 정보가 필요합니다.'}), 400
+        
+        # 디바이스 ID 가져오기
+        device_id = get_device_id()
+        if not device_id:
+            return jsonify({'error': '디바이스 ID가 필요합니다.'}), 400
+        
+        # 익명 ID 생성
+        anonymous_id = generate_anonymous_id()
+        
+        # 게시물 생성
+        post_data = {
+            'content': content,
+            'anonymous_id': anonymous_id,
+            'device_id': device_id,
+            'created_at': datetime.now().isoformat(),
+            'stocks': stocks  # stocks 배열을 직접 저장
+        }
+        
+        # 게시물 저장
+        result = supabase.table('posts').insert(post_data).execute()
+        if not result.data:
+            return jsonify({'error': '게시물 저장에 실패했습니다.'}), 500
+            
+        post_id = result.data[0]['id']
+        
+        # 종목 연결
+        for stock_code in stocks:
+            stock_result = supabase.table('post_stocks').insert({
+                'post_id': post_id,
+                'stock_code': stock_code
+            }).execute()
+            
+            if not stock_result.data:
+                # 게시물은 생성되었지만 종목 연결에 실패한 경우 게시물 삭제
+                supabase.table('posts').delete().eq('id', post_id).execute()
+                return jsonify({'error': '종목 연결에 실패했습니다.'}), 500
+        
+        # 성공 응답
+        return jsonify({
+            'message': '게시물이 작성되었습니다.',
+            'post_id': post_id
+        }), 201
+        
+    except Exception as e:
+        print(f"게시물 작성 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk/posts')
+def get_posts():
+    try:
+        filter_type = request.args.get('filter', 'all')
+        device_id = get_device_id()
+        
+        # 기본 쿼리
+        query = supabase.table('posts').select('*').order('created_at', desc=True)
+        
+        # 필터 적용
+        if filter_type == 'following':
+            try:
+                # URL에서 관심종목 데이터 가져오기
+                watchlist_json = request.args.get('watchlist', '[]')
+                watchlist = json.loads(watchlist_json)
+                print(f"받은 관심종목 데이터: {len(watchlist)}개 항목")
+                
+                # 관심종목 코드 목록 추출
+                watchlist_codes = [item['code'] for item in watchlist]
+                print(f"관심종목 코드: {watchlist_codes}")
+                
+                # 관심종목이 있는 게시물만 필터링
+                if watchlist_codes:
+                    # Supabase에서 모든 게시물 가져오기
+                    result = query.execute()
+                    filtered_posts = []
+                    
+                    for post in result.data:
+                        if isinstance(post['stocks'], list):
+                            # 게시물의 종목 코드와 관심종목 코드 비교
+                            post_stocks = [stock['code'] if isinstance(stock, dict) else stock for stock in post['stocks']]
+                            print(f"게시물 {post['id']} 종목: {post_stocks}")
+                            if any(code in watchlist_codes for code in post_stocks):
+                                filtered_posts.append(post)
+                    
+                    print(f"필터링된 게시물 수: {len(filtered_posts)}")
+                    result.data = filtered_posts
+                else:
+                    print("관심종목이 없습니다.")
+                    result = type('obj', (object,), {'data': []})
+            except Exception as e:
+                print(f"관심종목 필터링 중 오류 발생: {str(e)}")
+                return jsonify([])
+        else:
+            result = query.execute()
+        
+        if not result.data:
+            return jsonify([])
+        
+        # 종목 정보 가져오기
+        stock_codes = set()
+        for post in result.data:
+            if isinstance(post['stocks'], list):
+                stock_codes.update([stock['code'] if isinstance(stock, dict) else stock for stock in post['stocks']])
+        
+        # 종목 정보 로드
+        stock_info = {}
+        if stock_codes:
+            try:
+                with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+                    stocks_data = json.load(f)
+                    for stock in stocks_data:
+                        if stock['code'] in stock_codes:
+                            stock_info[stock['code']] = stock['name']
+            except Exception as e:
+                print(f"종목 정보 로드 중 오류 발생: {str(e)}")
+        
+        # 게시물에 종목명 추가
+        for post in result.data:
+            if isinstance(post['stocks'], list):
+                post['stocks'] = [{'code': code if isinstance(code, str) else code['code'], 
+                                 'name': stock_info.get(code if isinstance(code, str) else code['code'], 
+                                                       code if isinstance(code, str) else code['code'])} 
+                                for code in post['stocks']]
+            # 현재 디바이스의 게시물인지 표시
+            post['is_owner'] = post['device_id'] == device_id
+            
+        return jsonify(result.data)
+
+    except Exception as e:
+        print(f"게시물 조회 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk/post/<post_id>', methods=['DELETE'])
+def delete_post(post_id):
+    try:
+        device_id = get_device_id()
+        print(f"Attempting to delete post {post_id} for device {device_id}")
+        
+        # 게시물이 해당 디바이스에서 작성된 것인지 확인
+        result = supabase.table('posts').select('*').eq('id', post_id).eq('device_id', device_id).execute()
+        print(f"Query result: {result.data}")
+        
+        if not result.data:
+            print(f"Post not found or not owned by device {device_id}")
+            return jsonify({'error': '삭제 권한이 없습니다.'}), 403
+        
+        # 게시물 삭제 시도
+        try:
+            delete_result = supabase.table('posts').delete().eq('id', post_id).eq('device_id', device_id).execute()
+            print(f"Delete result: {delete_result}")
+            
+            # 삭제 후 게시물이 실제로 삭제되었는지 확인
+            verify_result = supabase.table('posts').select('*').eq('id', post_id).execute()
+            print(f"Verify result: {verify_result.data}")
+            
+            if verify_result.data:
+                print("Post still exists after delete operation")
+                return jsonify({'error': '게시물 삭제에 실패했습니다.'}), 500
+                
+            return jsonify({'message': '게시물이 삭제되었습니다.'})
+            
+        except Exception as delete_error:
+            print(f"Delete operation error: {str(delete_error)}")
+            return jsonify({'error': '게시물 삭제 중 오류가 발생했습니다.'}), 500
+
+    except Exception as e:
+        print(f"게시물 삭제 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk/post/<post_id>/comments', methods=['GET'])
+def get_comments(post_id):
+    try:
+        # 댓글 조회
+        result = supabase.table('comments').select('*').eq('post_id', post_id).order('created_at', desc=True).execute()
+        
+        if not result.data:
+            return jsonify([])
+        
+        # 각 댓글에 익명 ID 추가
+        for comment in result.data:
+            if not comment.get('anonymous_id'):
+                comment['anonymous_id'] = generate_anonymous_id()
+        
+        return jsonify(result.data)
+
+    except Exception as e:
+        print(f"댓글 조회 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk/post/<post_id>/comment', methods=['POST'])
+def create_comment(post_id):
+    try:
+        data = request.get_json()
+        if not data or 'content' not in data:
+            return jsonify({'error': '필수 필드가 누락되었습니다.'}), 400
+
+        device_id = get_device_id()
+        
+        # 이전 댓글에서 익명 ID 가져오기
+        result = supabase.table('comments').select('anonymous_id').eq('device_id', device_id).order('created_at', desc=True).limit(1).execute()
+        
+        # 이전 익명 ID가 없으면 새로 생성
+        anonymous_id = result.data[0]['anonymous_id'] if result.data else generate_anonymous_id()
+
+        # 현재 시간을 ISO 형식으로 저장
+        current_time = datetime.now().astimezone().isoformat()
+
+        # 댓글 생성
+        comment = {
+            'content': data['content'],
+            'created_at': current_time,
+            'post_id': post_id,
+            'device_id': device_id,
+            'anonymous_id': anonymous_id
+        }
+
+        # Supabase에 댓글 저장
+        result = supabase.table('comments').insert(comment).execute()
+        
+        if not result.data:
+            raise Exception('댓글 저장에 실패했습니다.')
+
+        response = jsonify(result.data[0])
+        response.set_cookie('device_id', device_id, max_age=365*24*60*60)  # 1년간 유효
+        return response
+
+    except Exception as e:
+        print(f"댓글 작성 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk/comment/<comment_id>', methods=['DELETE'])
+def delete_comment(comment_id):
+    try:
+        device_id = get_device_id()
+        
+        # 댓글이 해당 디바이스에서 작성된 것인지 확인
+        result = supabase.table('comments').select('*').eq('id', comment_id).eq('device_id', device_id).execute()
+        
+        if not result.data:
+            return jsonify({'error': '삭제 권한이 없습니다.'}), 403
+        
+        # 댓글 삭제
+        delete_result = supabase.table('comments').delete().eq('id', comment_id).execute()
+        
+        return jsonify({'message': '댓글이 삭제되었습니다.'})
+
+    except Exception as e:
+        print(f"댓글 삭제 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk/post/<post_id>/like', methods=['POST'])
+def like_post(post_id):
+    try:
+        device_id = get_device_id()
+        
+        # 이미 좋아요를 눌렀는지 확인
+        result = supabase.table('likes').select('*').eq('post_id', post_id).eq('device_id', device_id).execute()
+        
+        if result.data:
+            # 이미 좋아요를 눌렀다면 취소
+            supabase.table('likes').delete().eq('post_id', post_id).eq('device_id', device_id).execute()
+            return jsonify({'liked': False})
+        else:
+            # 좋아요 추가
+            like = {
+                'post_id': post_id,
+                'device_id': device_id,
+                'created_at': datetime.now().astimezone().isoformat()
+            }
+            supabase.table('likes').insert(like).execute()
+            return jsonify({'liked': True})
+            
+    except Exception as e:
+        print(f"좋아요 처리 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/valuetalk/post/<post_id>/likes')
+def get_post_likes(post_id):
+    try:
+        device_id = get_device_id()
+        
+        # 게시물의 좋아요 수 조회
+        result = supabase.table('likes').select('*').eq('post_id', post_id).execute()
+        like_count = len(result.data)
+        
+        # 현재 사용자가 좋아요를 눌렀는지 확인
+        user_like = supabase.table('likes').select('*').eq('post_id', post_id).eq('device_id', device_id).execute()
+        is_liked = len(user_like.data) > 0
+        
+        return jsonify({
+            'count': like_count,
+            'is_liked': is_liked
+        })
+        
+    except Exception as e:
+        print(f"좋아요 정보 조회 중 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':

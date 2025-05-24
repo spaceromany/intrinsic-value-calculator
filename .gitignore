@@ -33,4 +33,12 @@ ENV/
 
 # OS
 .DS_Store
-Thumbs.db 
+Thumbs.db
+
+# Environment Variables
+.env
+.env.*
+
+# Environment Variables
+.env
+.env.* 
