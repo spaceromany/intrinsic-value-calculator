@@ -131,13 +131,14 @@
         white-space: pre-wrap;
         word-break: break-word;
         flex-grow: 1;
-        overflow: hidden;
-        display: -webkit-box;
-        -webkit-line-clamp: 5;
-        -webkit-box-orient: vertical;
     }
-    .post-content.expanded {
-        -webkit-line-clamp: unset;
+    .post-content.collapsed {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        max-height: 3.2em; /* line-height * 2 */
     }
     .stock-tag {
         display: inline-block;
@@ -236,9 +237,13 @@
         font-size: 0.9rem;
         margin-top: 0.5rem;
         display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        background-color: #f8f9fa;
     }
     .read-more:hover {
-        text-decoration: underline;
+        background-color: #e9ecef;
+        text-decoration: none;
     }
 </style>
 
@@ -493,6 +498,10 @@ function createPostElement(post) {
     const div = document.createElement('div');
     div.className = 'card post-card';
     div.setAttribute('data-post-id', post.id);
+    
+    // 내용이 2줄을 초과하는지 확인
+    const contentClass = 'post-content collapsed';
+    
     div.innerHTML = `
         <div class="card-body">
             <div class="post-header">
@@ -505,12 +514,10 @@ function createPostElement(post) {
                        onclick="event.stopPropagation(); showPostOptions('${post.id}')"></i>
                 ` : ''}
             </div>
-            <div class="post-content" id="content-${post.id}">${post.content}</div>
-            ${post.content.length > 200 ? `
-                <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')">
-                    더보기
-                </span>
-            ` : ''}
+            <div class="${contentClass}" id="content-${post.id}">${post.content}</div>
+            <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')" style="display: none;">
+                더보기
+            </span>
             <div class="post-stocks">
                 ${post.stocks.map(stock => `
                     <span class="stock-tag" onclick="event.stopPropagation(); filterByStock('${stock.code}')">
@@ -543,6 +550,15 @@ function createPostElement(post) {
             </div>
         </div>
     `;
+
+    // 카드가 렌더링된 후 더보기 버튼 표시 여부 확인
+    setTimeout(() => {
+        const content = document.getElementById(`content-${post.id}`);
+        const readMore = content.nextElementSibling;
+        if (content.scrollHeight > content.clientHeight) {
+            readMore.style.display = 'inline-block';
+        }
+    }, 0);
 
     // 카드 클릭 이벤트 추가
     div.addEventListener('click', function(e) {
@@ -888,12 +904,14 @@ function toggleContent(postId) {
     const content = document.getElementById(`content-${postId}`);
     const readMore = content.nextElementSibling;
     
-    if (content.classList.contains('expanded')) {
-        content.classList.remove('expanded');
-        readMore.textContent = '더보기';
-    } else {
-        content.classList.add('expanded');
+    if (content.classList.contains('collapsed')) {
+        // 더보기
+        content.classList.remove('collapsed');
         readMore.textContent = '접기';
+    } else {
+        // 접기
+        content.classList.add('collapsed');
+        readMore.textContent = '더보기';
     }
 }
 </script>
