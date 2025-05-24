@@ -450,6 +450,24 @@ def get_posts():
         elif filter_type == 'my':
             # 현재 디바이스의 게시물만 필터링
             result = query.eq('device_id', device_id).execute()
+        elif filter_type == 'stock':
+            # 특정 종목의 게시물만 필터링
+            stock_code = request.args.get('code')
+            if not stock_code:
+                return jsonify([])
+            
+            # Supabase에서 모든 게시물 가져오기
+            result = query.execute()
+            filtered_posts = []
+            
+            for post in result.data:
+                if isinstance(post['stocks'], list):
+                    # 게시물의 종목 코드와 요청된 종목 코드 비교
+                    post_stocks = [stock['code'] if isinstance(stock, dict) else stock for stock in post['stocks']]
+                    if stock_code in post_stocks:
+                        filtered_posts.append(post)
+            
+            result.data = filtered_posts
         else:
             result = query.execute()
         

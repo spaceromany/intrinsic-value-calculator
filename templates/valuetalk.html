@@ -31,7 +31,7 @@
                     <i class="fas fa-sync-alt"></i> 새로고침
                 </button>
             </div>
-        </div>
+        </div>`
     </div>
 
     <!-- 게시물 목록 섹션 -->
@@ -156,38 +156,28 @@
         max-height: 3.2em;
     }
     .post-stocks {
-        margin: 0;
-        padding: 0.5rem 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
     }
     .stock-tag {
-        display: inline-block;
-        padding: 0.4rem 0.9rem;
-        margin: 0.25rem;
-        background-color: #e7f1ff;
-        border: 1px solid #0d6efd;
-        border-radius: 1rem;
-        font-size: 0.95rem;
         color: #0d6efd;
-        font-weight: 600;
+        text-decoration: none;
+        font-size: 0.9rem;
         transition: all 0.2s ease;
     }
     .stock-tag:hover {
-        background-color: #0d6efd;
-        color: white;
+        color: #0a58ca;
         text-decoration: none;
-        transform: translateY(-1px);
     }
     .post-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 0.75rem;
-        padding: 0.5rem 0;
     }
-    .post-stocks {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
+    .post-author {
+        font-size: 0.95rem;
     }
     .post-meta {
         display: flex;
@@ -204,9 +194,6 @@
         margin-top: 0.75rem;
         padding-top: 0.75rem;
         border-top: 1px solid #f0f0f0;
-    }
-    .post-author {
-        font-size: 0.9rem;
     }
     .post-actions {
         display: flex;
@@ -576,12 +563,8 @@ function createPostElement(post) {
     div.innerHTML = `
         <div class="card-body">
             <div class="post-header">
-                <div class="post-stocks">
-                    ${post.stocks.map(stock => `
-                        <span class="stock-tag" onclick="event.stopPropagation(); filterByStock('${stock.code}')">
-                            ${stock.name}
-                        </span>
-                    `).join('')}
+                <div class="post-author text-muted">
+                    <small class="fw-bold">${post.anonymous_id}</small>
                 </div>
                 <div class="post-meta">
                     ${post.is_owner ? `
@@ -593,10 +576,12 @@ function createPostElement(post) {
                     </div>
                 </div>
             </div>
-            <div class="${contentClass}" id="content-${post.id}">${post.content}</div>
-            <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')" style="display: none;">
-                더보기
-            </span>
+            <div class="post-content-wrapper">
+                <div class="${contentClass}" id="content-${post.id}">${post.content}</div>
+                <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')" style="display: none;">
+                    더보기
+                </span>
+            </div>
             <div class="post-footer">
                 <div class="post-actions">
                     <span class="like-wrapper" onclick="event.stopPropagation(); likePost('${post.id}')">
@@ -607,9 +592,11 @@ function createPostElement(post) {
                         <i class="far fa-comment me-1" id="comment-icon-${post.id}"></i>
                         <span class="comment-count" id="comment-count-${post.id}"></span>
                     </span>
-                </div>
-                <div class="post-author text-muted">
-                    <small class="fw-bold">From ${post.anonymous_id}</small>
+                    <div class="post-stocks ms-3">
+                        ${post.stocks.map(stock => `
+                            <a href="#" class="stock-tag" data-stock-code="${stock.code}" onclick="event.preventDefault(); filterByStock('${stock.code}')">#${stock.name}</a>
+                        `).join('')}
+                    </div>
                 </div>
             </div>
             
@@ -843,8 +830,29 @@ async function filterPosts(filter) {
     }
 }
 
-function filterByStock(code) {
-    // TODO: 특정 종목으로 필터링 구현
+async function filterByStock(code) {
+    try {
+        const response = await fetch(`/valuetalk/posts?filter=stock&code=${code}`);
+        if (!response.ok) throw new Error('게시물을 불러오는데 실패했습니다.');
+        
+        const posts = await response.json();
+        displayPosts(posts);
+        
+        // 필터 버튼 상태 업데이트
+        document.querySelectorAll('.filter-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        
+        // 제목 업데이트
+        const stockName = document.querySelector(`[data-stock-code="${code}"]`)?.textContent.replace('#', '') || code;
+        const titleElement = document.querySelector('.display-title');
+        if (titleElement) {
+            titleElement.textContent = `${stockName} 관련 게시글`;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('게시물을 불러오는데 실패했습니다.');
+    }
 }
 
 async function toggleComments(postId) {
