@@ -156,9 +156,10 @@
         max-height: 3.2em;
     }
     .post-stocks {
-        display: inline-flex;
+        display: flex;
         align-items: center;
         gap: 0.5rem;
+        margin-left: auto;
     }
     .stock-tag {
         color: #0d6efd;
@@ -592,11 +593,11 @@ function createPostElement(post) {
                         <i class="far fa-comment me-1" id="comment-icon-${post.id}"></i>
                         <span class="comment-count" id="comment-count-${post.id}"></span>
                     </span>
-                    <div class="post-stocks ms-3">
-                        ${post.stocks.map(stock => `
-                            <a href="#" class="stock-tag" data-stock-code="${stock.code}" onclick="event.preventDefault(); filterByStock('${stock.code}')">#${stock.name}</a>
-                        `).join('')}
-                    </div>
+                </div>
+                <div class="post-stocks">
+                    ${post.stocks.map(stock => `
+                        <a href="#" class="stock-tag" data-stock-code="${stock.code}" onclick="event.preventDefault(); filterByStock('${stock.code}')">#${stock.name}</a>
+                    `).join('')}
                 </div>
             </div>
             
