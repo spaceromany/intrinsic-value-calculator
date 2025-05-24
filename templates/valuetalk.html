@@ -65,7 +65,16 @@
                         </div>
                         <div id="stockSearchResults" class="list-group mb-3" style="display: none;"></div>
                         <div id="selectedStocks" class="mb-3"></div>
-                        <textarea id="postContent" class="form-control mb-3" rows="3" placeholder="무슨 생각을 하고 계신가요?"></textarea>
+                        <div class="position-relative">
+                            <textarea id="postContent" class="form-control mb-2" rows="3" 
+                                      placeholder="무슨 생각을 하고 계신가요? (최대 280자)" 
+                                      maxlength="280"></textarea>
+                            <div class="text-end">
+                                <small class="text-muted">
+                                    <span id="charCount">0</span>/280
+                                </small>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -78,15 +87,48 @@
 </div>
 
 <style>
+    .posts-grid {
+        display: grid;
+        grid-template-columns: repeat(1, 1fr);
+        gap: 1rem;
+        padding: 1rem;
+    }
+    @media (min-width: 768px) {
+        .posts-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+    @media (min-width: 1200px) {
+        .posts-grid {
+            grid-template-columns: repeat(3, 1fr);
+        }
+    }
     .post-card {
         border: none;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        margin-bottom: 1rem;
         transition: all 0.3s ease;
         cursor: pointer;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
     }
     .post-card:hover {
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .post-content {
+        font-size: 1.1rem;
+        line-height: 1.6;
+        margin: 1rem 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        flex-grow: 1;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 5;
+        -webkit-box-orient: vertical;
+    }
+    .post-content.expanded {
+        -webkit-line-clamp: unset;
     }
     .stock-tag {
         display: inline-block;
@@ -103,6 +145,9 @@
     }
     .post-actions {
         color: #6c757d;
+        margin-top: 0.5rem;
+        padding-top: 0.5rem;
+        border-top: 1px solid #e9ecef;
     }
     .post-actions i {
         cursor: pointer;
@@ -135,6 +180,46 @@
     }
     .fa-trash-alt:hover {
         color: #dc3545 !important;
+    }
+    .post-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 0.5rem;
+    }
+    .post-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    .post-stocks {
+        margin: 0.5rem 0;
+    }
+    .comments-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e9ecef;
+    }
+    .comment-form {
+        margin-top: 1rem;
+    }
+    .comment-item {
+        padding: 0.5rem;
+        border-radius: 0.5rem;
+        background-color: #f8f9fa;
+    }
+    .comment-item:hover {
+        background-color: #e9ecef;
+    }
+    .read-more {
+        color: #0d6efd;
+        cursor: pointer;
+        font-size: 0.9rem;
+        margin-top: 0.5rem;
+        display: inline-block;
+    }
+    .read-more:hover {
+        text-decoration: underline;
     }
 </style>
 
@@ -256,6 +341,40 @@ async function getAnonymousId() {
     return anonymousId;
 }
 
+// 글자수 카운터 업데이트 함수
+function updateCharCount() {
+    const textarea = document.getElementById('postContent');
+    const charCount = document.getElementById('charCount');
+    const currentLength = textarea.value.length;
+    charCount.textContent = currentLength;
+    
+    // 글자수가 250자 이상이면 색상 변경
+    if (currentLength >= 250) {
+        charCount.style.color = '#dc3545';
+    } else {
+        charCount.style.color = '#6c757d';
+    }
+}
+
+// 모달이 열릴 때 이벤트 리스너 추가
+document.getElementById('postModal').addEventListener('show.bs.modal', function () {
+    const textarea = document.getElementById('postContent');
+    textarea.addEventListener('input', updateCharCount);
+    updateCharCount(); // 초기 카운트 업데이트
+});
+
+// 모달이 닫힐 때 이벤트 리스너 제거
+document.getElementById('postModal').addEventListener('hidden.bs.modal', function () {
+    const textarea = document.getElementById('postContent');
+    textarea.removeEventListener('input', updateCharCount);
+    textarea.value = '';
+    document.getElementById('charCount').textContent = '0';
+    document.getElementById('charCount').style.color = '#6c757d';
+    selectedStocks.clear();
+    document.getElementById('selectedStocks').innerHTML = '';
+    document.getElementById('stockSearchResults').style.display = 'none';
+});
+
 async function submitPost() {
     const content = document.getElementById('postContent').value.trim();
     
@@ -266,6 +385,11 @@ async function submitPost() {
     
     if (!content) {
         alert('내용을 입력해주세요.');
+        return;
+    }
+
+    if (content.length > 280) {
+        alert('게시물은 280자를 초과할 수 없습니다.');
         return;
     }
 
@@ -289,13 +413,14 @@ async function submitPost() {
         
         // 폼 초기화
         document.getElementById('postContent').value = '';
+        document.getElementById('charCount').textContent = '0';
+        document.getElementById('charCount').style.color = '#6c757d';
         selectedStocks.clear();
         document.getElementById('selectedStocks').innerHTML = '';
         
         // 게시물 목록 새로고침
         await loadPosts();
 
-        // 응답이 실패한 경우에만 에러 메시지 표시
         if (!response.ok) {
             const data = await response.json();
             console.error('게시물 작성 중 오류:', data);
@@ -324,10 +449,16 @@ function displayPosts(posts) {
         return;
     }
     
+    // 그리드 컨테이너 생성
+    const gridContainer = document.createElement('div');
+    gridContainer.className = 'posts-grid';
+    
     posts.forEach(post => {
         const postElement = createPostElement(post);
-        container.appendChild(postElement);
+        gridContainer.appendChild(postElement);
     });
+    
+    container.appendChild(gridContainer);
 }
 
 function createPostElement(post) {
@@ -336,39 +467,41 @@ function createPostElement(post) {
     div.setAttribute('data-post-id', post.id);
     div.innerHTML = `
         <div class="card-body">
-            <div class="d-flex justify-content-between align-items-start mb-2">
-                <small class="text-muted fw-bold">${post.anonymous_id}</small>
-                <div class="d-flex align-items-center">
-                    <small class="text-muted me-2">${formatTime(post.created_at)}</small>
-                    ${post.is_owner ? `
-                        <i class="fas fa-trash-alt text-muted" style="cursor: pointer;" 
-                           onclick="event.stopPropagation(); showPostOptions('${post.id}')"></i>
-                    ` : ''}
+            <div class="post-header">
+                <div class="post-meta">
+                    <small class="text-muted fw-bold">${post.anonymous_id}</small>
+                    <small class="text-muted">${formatTime(post.created_at)}</small>
                 </div>
+                ${post.is_owner ? `
+                    <i class="fas fa-trash-alt text-muted" style="cursor: pointer;" 
+                       onclick="event.stopPropagation(); showPostOptions('${post.id}')"></i>
+                ` : ''}
             </div>
-            <p class="card-text">${post.content}</p>
-            <div class="mb-2">
+            <div class="post-content" id="content-${post.id}">${post.content}</div>
+            ${post.content.length > 200 ? `
+                <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')">
+                    더보기
+                </span>
+            ` : ''}
+            <div class="post-stocks">
                 ${post.stocks.map(stock => `
                     <span class="stock-tag" onclick="event.stopPropagation(); filterByStock('${stock.code}')">
                         ${stock.name}
                     </span>
                 `).join('')}
             </div>
-            <div class="d-flex justify-content-between align-items-center">
-                <div class="post-actions">
-                    <span class="like-wrapper" onclick="event.stopPropagation(); likePost('${post.id}')">
-                        <i class="far fa-heart me-1" id="like-icon-${post.id}"></i>
-                        <span class="like-count" id="like-count-${post.id}">0</span>
-                    </span>
-                    <span class="comment-icon-wrapper ms-3" onclick="event.stopPropagation(); toggleComments('${post.id}')">
-                        <i class="far fa-comment me-1" id="comment-icon-${post.id}"></i>
-                        <span class="comment-count" id="comment-count-${post.id}"></span>
-                    </span>
-                </div>
+            <div class="post-actions">
+                <span class="like-wrapper" onclick="event.stopPropagation(); likePost('${post.id}')">
+                    <i class="far fa-heart me-1" id="like-icon-${post.id}"></i>
+                    <span class="like-count" id="like-count-${post.id}">0</span>
+                </span>
+                <span class="comment-icon-wrapper ms-3" onclick="event.stopPropagation(); toggleComments('${post.id}')">
+                    <i class="far fa-comment me-1" id="comment-icon-${post.id}"></i>
+                    <span class="comment-count" id="comment-count-${post.id}"></span>
+                </span>
             </div>
             
-            <!-- 댓글 섹션 -->
-            <div id="comments-${post.id}" class="mt-3" style="display: none;">
+            <div id="comments-${post.id}" class="comments-section" style="display: none;">
                 <div class="comments-list mb-3"></div>
                 <div class="comment-form">
                     <div class="input-group">
@@ -385,12 +518,10 @@ function createPostElement(post) {
 
     // 카드 클릭 이벤트 추가
     div.addEventListener('click', function(e) {
-        // 댓글 섹션이나 댓글 입력 영역을 클릭한 경우 이벤트 중단
         if (e.target.closest('.comment-form') || e.target.closest('.comments-list')) {
             return;
         }
         
-        // 이미 댓글이 표시되어 있는 경우 토글
         const commentsSection = document.getElementById(`comments-${post.id}`);
         if (commentsSection.style.display === 'block') {
             commentsSection.style.display = 'none';
@@ -400,7 +531,6 @@ function createPostElement(post) {
         }
     });
 
-    // 댓글 수와 좋아요 정보 로드
     loadCommentCount(post.id);
     loadLikeInfo(post.id);
     return div;
@@ -597,7 +727,7 @@ async function loadComments(postId) {
         const response = await fetch(`/valuetalk/post/${postId}/comments`);
         const comments = await response.json();
         
-        const commentsList = document.querySelector(`#comments-${postId} .comments-list`);
+        const commentsList = document.querySelector(`#comments-${post.id} .comments-list`);
         commentsList.innerHTML = '';
         
         // 댓글을 오래된 순으로 정렬 (최신 댓글이 아래에 표시되도록)
@@ -726,12 +856,17 @@ async function deletePost(postId) {
     }
 }
 
-// 모달이 닫힐 때 폼 초기화
-document.getElementById('postModal').addEventListener('hidden.bs.modal', function () {
-    document.getElementById('postContent').value = '';
-    selectedStocks.clear();
-    document.getElementById('selectedStocks').innerHTML = '';
-    document.getElementById('stockSearchResults').style.display = 'none';
-});
+function toggleContent(postId) {
+    const content = document.getElementById(`content-${postId}`);
+    const readMore = content.nextElementSibling;
+    
+    if (content.classList.contains('expanded')) {
+        content.classList.remove('expanded');
+        readMore.textContent = '더보기';
+    } else {
+        content.classList.add('expanded');
+        readMore.textContent = '접기';
+    }
+}
 </script>
 {% endblock %} 
