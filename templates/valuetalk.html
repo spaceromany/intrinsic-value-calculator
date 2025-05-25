@@ -31,7 +31,7 @@
                     <i class="fas fa-sync-alt"></i> 새로고침
                 </button>
             </div>
-        </div>`
+        </div>
     </div>
 
     <!-- 게시물 목록 섹션 -->
@@ -225,34 +225,6 @@
         background-color: #e7f1ff;
         text-decoration: none;
     }
-    .card-body {
-        padding: 1.25rem;
-    }
-    .comments-section {
-        margin-top: 1rem;
-        padding-top: 1rem;
-        border-top: 1px solid #f0f0f0;
-    }
-    .comment-item {
-        padding: 0.75rem;
-        border-radius: 0.5rem;
-        background-color: #f8f9fa;
-        margin-bottom: 0.5rem;
-        transition: all 0.2s ease;
-    }
-    .comment-item:hover {
-        background-color: #e9ecef;
-    }
-    .fa-trash-alt {
-        font-size: 0.9rem;
-        opacity: 0.7;
-        transition: all 0.2s ease;
-    }
-    .fa-trash-alt:hover {
-        opacity: 1;
-        color: #dc3545 !important;
-        transform: scale(1.1);
-    }
     .selected-stock {
         display: inline-flex;
         align-items: center;
@@ -288,7 +260,7 @@
 </style>
 
 <script>
-let selectedStock = null;  // selectedStocks Set을 단일 변수로 변경
+let selectedStock = null;
 let currentPage = 1;
 let hasMore = false;
 let isLoading = false;
@@ -313,353 +285,259 @@ const debouncedLoadMore = debounce(() => {
         loadMore();
     }
 }, 200);
-
-// 스크롤 이벤트 리스너 추가
 window.addEventListener('scroll', debouncedLoadMore);
 
-// 익명 ID 새로고침 함수
+// 익명 ID 새로고침
 async function refreshAnonymousId() {
     try {
-        const response = await fetch('/valuetalk/anonymous-id', {
-            method: 'POST'
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            const newAnonymousId = data.anonymous_id;
-            
-            // 로컬 스토리지에 새 ID 저장
-            localStorage.setItem('anonymousId', newAnonymousId);
-            
-            // 화면에 새 ID 표시
-            const displayElement = document.getElementById('currentAnonymousId');
-            if (displayElement) {
-                displayElement.textContent = newAnonymousId;
-            }
-        } else {
-            throw new Error('익명 ID를 가져오는데 실패했습니다.');
-        }
-    } catch (error) {
-        console.error('익명 ID 새로고침 중 오류:', error);
-        alert('익명 ID를 새로고침하는데 실패했습니다.');
+        const response = await fetch('/valuetalk/anonymous-id', { method: 'POST' });
+        if (!response.ok) throw new Error();
+        const data = await response.json();
+        localStorage.setItem('anonymousId', data.anonymous_id);
+        document.getElementById('currentAnonymousId').textContent = data.anonymous_id;
+    } catch {
+        alert('익명 ID를 가져오는데 실패했습니다.');
     }
 }
 
-// 익명 ID 표시 함수
+// 익명 ID 표시
 async function displayAnonymousId() {
-    try {
-        const anonymousId = await getAnonymousId();
-        const displayElement = document.getElementById('currentAnonymousId');
-        if (displayElement) {
-            displayElement.textContent = anonymousId || 'ID를 가져올 수 없습니다';
-        }
-    } catch (error) {
-        console.error('익명 ID 표시 중 오류:', error);
-        const displayElement = document.getElementById('currentAnonymousId');
-        if (displayElement) {
-            displayElement.textContent = 'ID를 가져올 수 없습니다';
-        }
-    }
-}
-
-// 익명 ID 관리 함수
-async function getAnonymousId() {
     let anonymousId = localStorage.getItem('anonymousId');
     if (!anonymousId) {
         try {
-            const response = await fetch('/valuetalk/anonymous-id', {
-                method: 'POST'
-            });
-            if (response.ok) {
-                const data = await response.json();
+            const res = await fetch('/valuetalk/anonymous-id', { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
                 anonymousId = data.anonymous_id;
                 localStorage.setItem('anonymousId', anonymousId);
             }
-        } catch (error) {
-            console.error('익명 ID 발급 중 오류:', error);
-        }
+        } catch {}
     }
-    return anonymousId;
+    document.getElementById('currentAnonymousId').textContent = anonymousId || 'ID를 가져올 수 없습니다';
 }
 
-// 페이지 로드 시 익명 ID 표시
+// 게시물 로드시 호출
 document.addEventListener('DOMContentLoaded', function() {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => {
-        return new bootstrap.Tooltip(tooltipTriggerEl, {
-            html: true,
-            trigger: 'hover'
-        });
-    });
-
-    // 실시간 검색을 위한 이벤트 리스너
-    const searchInput = document.getElementById('stockSearchInput');
-    const debouncedSearch = debounce(() => {
-        const query = searchInput.value.trim();
-        if (query.length >= 2) {
-            searchStocks();
-        } else {
-            document.getElementById('stockSearchResults').style.display = 'none';
-        }
-    }, 300);
-
-    searchInput.addEventListener('input', debouncedSearch);
-    
-    // 초기 게시물 로드
+    [...tooltipTriggerList].forEach(el => new bootstrap.Tooltip(el, { html: true, trigger: 'hover' }));
+    document.getElementById('stockSearchInput').addEventListener('input', debounce(() => {
+        const q = document.getElementById('stockSearchInput').value.trim();
+        if (q.length >= 2) searchStocks();
+        else document.getElementById('stockSearchResults').style.display = 'none';
+    }, 300));
     loadPosts();
-    
-    // 익명 ID 표시
     displayAnonymousId();
 });
 
+// 주식 검색
 async function searchStocks() {
     const query = document.getElementById('stockSearchInput').value.trim();
     if (!query) return;
-
     try {
-        const response = await fetch(`/search?query=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        
+        const res = await fetch(`/search?query=${encodeURIComponent(query)}`);
+        const data = await res.json();
         const resultsDiv = document.getElementById('stockSearchResults');
         resultsDiv.innerHTML = '';
-        
-        if (data.stocks && data.stocks.length > 0) {
+        if (data.stocks?.length) {
             data.stocks.forEach(stock => {
-                const item = document.createElement('a');
-                item.href = '#';
-                item.className = 'list-group-item list-group-item-action';
-                item.innerHTML = `${stock.name} (${stock.code})`;
-                item.onclick = (e) => {
+                const a = document.createElement('a');
+                a.href = '#';
+                a.className = 'list-group-item list-group-item-action';
+                a.innerText = `${stock.name} (${stock.code})`;
+                a.onclick = e => {
                     e.preventDefault();
                     selectStock(stock);
                     document.getElementById('stockSearchInput').value = '';
                     resultsDiv.style.display = 'none';
                 };
-                resultsDiv.appendChild(item);
+                resultsDiv.appendChild(a);
             });
             resultsDiv.style.display = 'block';
         } else {
             resultsDiv.style.display = 'none';
         }
-    } catch (error) {
-        console.error('검색 중 오류:', error);
+    } catch {
+        console.error('검색 실패');
     }
 }
 
+// 종목 선택
 function selectStock(stock) {
-    const container = document.getElementById('selectedStocks');
-    const selectedStockDiv = container.querySelector('.selected-stock');
-    const stockNameSpan = selectedStockDiv.querySelector('.stock-name');
-    
-    // 검색 UI 숨기기
     document.getElementById('stockSearchSection').style.display = 'none';
-    
-    // 선택된 종목 표시
-    selectedStockDiv.style.display = 'inline-flex';
-    stockNameSpan.textContent = stock.name;
+    const div = document.querySelector('.selected-stock');
+    div.style.display = 'inline-flex';
+    div.querySelector('.stock-name').textContent = stock.name;
     selectedStock = stock;
 }
 
+// 선택 취소
 function removeSelectedStock() {
-    const container = document.getElementById('selectedStocks');
-    const selectedStockDiv = container.querySelector('.selected-stock');
-    selectedStockDiv.style.display = 'none';
+    document.querySelector('.selected-stock').style.display = 'none';
     selectedStock = null;
-    
-    // 검색 UI 다시 표시
     document.getElementById('stockSearchSection').style.display = 'block';
     document.getElementById('stockSearchInput').value = '';
     document.getElementById('stockSearchResults').style.display = 'none';
 }
 
-// 글자수 카운터 업데이트 함수
+// 글자수 카운터
 function updateCharCount() {
-    const textarea = document.getElementById('postContent');
-    const charCount = document.getElementById('charCount');
-    const currentLength = textarea.value.length;
-    charCount.textContent = currentLength;
-    
-    // 글자수가 250자 이상이면 색상 변경
-    if (currentLength >= 250) {
-        charCount.style.color = '#dc3545';
-    } else {
-        charCount.style.color = '#6c757d';
-    }
+    const len = document.getElementById('postContent').value.length;
+    const cc = document.getElementById('charCount');
+    cc.textContent = len;
+    cc.style.color = len >= 250 ? '#dc3545' : '#6c757d';
 }
-
-// 모달이 열릴 때 이벤트 리스너 추가
-document.getElementById('postModal').addEventListener('show.bs.modal', function () {
-    const textarea = document.getElementById('postContent');
-    textarea.addEventListener('input', updateCharCount);
-    updateCharCount(); // 초기 카운트 업데이트
+document.getElementById('postModal').addEventListener('show.bs.modal', () => {
+    const ta = document.getElementById('postContent');
+    ta.addEventListener('input', updateCharCount);
+    updateCharCount();
+});
+document.getElementById('postModal').addEventListener('hidden.bs.modal', () => {
+    const ta = document.getElementById('postContent');
+    ta.removeEventListener('input', updateCharCount);
+    ta.value = '';
+    const cc = document.getElementById('charCount');
+    cc.textContent = '0';
+    cc.style.color = '#6c757d';
+    removeSelectedStock();
 });
 
-// 모달이 닫힐 때 이벤트 리스너 제거
-document.getElementById('postModal').addEventListener('hidden.bs.modal', function () {
-    const textarea = document.getElementById('postContent');
-    textarea.removeEventListener('input', updateCharCount);
-    textarea.value = '';
-    document.getElementById('charCount').textContent = '0';
-    document.getElementById('charCount').style.color = '#6c757d';
-    selectedStock = null;
-    const selectedStockDiv = document.querySelector('.selected-stock');
-    selectedStockDiv.style.display = 'none';
-    document.getElementById('stockSearchSection').style.display = 'block';
-    document.getElementById('stockSearchResults').style.display = 'none';
-});
-
+// 게시물 제출
 async function submitPost() {
     const content = document.getElementById('postContent').value.trim();
-    
-    if (!selectedStock) {
-        alert('종목을 선택해주세요.');
-        return;
-    }
-    
-    if (!content) {
-        alert('내용을 입력해주세요.');
-        return;
-    }
-
-    if (content.length > 280) {
-        alert('게시물은 280자를 초과할 수 없습니다.');
-        return;
-    }
-
+    if (!selectedStock) return alert('종목을 선택해주세요.');
+    if (!content) return alert('내용을 입력해주세요.');
+    if (content.length > 280) return alert('280자 초과!');
     try {
-        const anonymousId = await getAnonymousId();
-        const response = await fetch('/valuetalk/post', {
+        const anonymousId = localStorage.getItem('anonymousId');
+        const res = await fetch('/valuetalk/post', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                content: content,
-                stocks: [selectedStock.code],  // 단일 종목 코드를 배열로 전송
-                anonymous_id: anonymousId
-            })
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ content, stocks:[selectedStock.code], anonymous_id: anonymousId })
         });
-
-        // 모달 닫기
-        const modal = bootstrap.Modal.getInstance(document.getElementById('postModal'));
-        modal.hide();
-        
-        // 폼 초기화
-        document.getElementById('postContent').value = '';
-        document.getElementById('charCount').textContent = '0';
-        document.getElementById('charCount').style.color = '#6c757d';
-        selectedStock = null;
-        const selectedStockDiv = document.querySelector('.selected-stock');
-        selectedStockDiv.style.display = 'none';
-        
-        // 게시물 목록 새로고침
-        await loadPosts();
-
-        if (!response.ok) {
-            const data = await response.json();
-            console.error('게시물 작성 중 오류:', data);
-        }
-    } catch (error) {
-        console.error('게시물 작성 중 오류:', error);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error||'실패');
+        bootstrap.Modal.getInstance(document.getElementById('postModal')).hide();
+        removeSelectedStock();
+        document.getElementById('postContent').value='';
+        loadPosts();
+    } catch (e) {
+        alert('게시물 작성 실패');
     }
 }
 
-async function loadPosts(filter = 'all', page = 1) {
+// 게시물 로드 (filter, page, stock code 지원)
+async function loadPosts(filter='all', page=1, code=null) {
     if (isLoading) return;
     isLoading = true;
-    
     try {
         currentFilter = filter;
         let url = `/valuetalk/posts?filter=${filter}&page=${page}`;
-        
-        if (filter === 'following') {
-            const watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
-            if (watchlist.length === 0) {
-                alert('관심종목이 없습니다.');
-                document.querySelector('[data-filter="all"]').click();
-                return;
-            }
-            url += `&watchlist=${encodeURIComponent(JSON.stringify(watchlist))}`;
+        if (filter==='following') {
+            const wl = JSON.parse(localStorage.getItem('watchlist')||'[]');
+            if (!wl.length) { alert('관심종목이 없습니다.'); document.querySelector('[data-filter="all"]').click(); return; }
+            url += `&watchlist=${encodeURIComponent(JSON.stringify(wl))}`;
         }
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        if (page === 1) {
-            displayPosts(data.posts);
-        } else {
-            appendPosts(data.posts);
+        if (filter==='stock' && code) {
+            url += `&code=${encodeURIComponent(code)}`;
         }
-        
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!Array.isArray(data.posts)) throw '';
+        if (page===1) displayPosts(data.posts);
+        else appendPosts(data.posts);
         hasMore = data.has_more;
         currentPage = page;
-        
-        // 더보기 버튼 표시/숨김
-        const loadMoreBtn = document.getElementById('loadMoreBtn');
-        if (loadMoreBtn) {
-            loadMoreBtn.style.display = hasMore ? 'block' : 'none';
-        }
-    } catch (error) {
-        console.error('게시물 로드 중 오류:', error);
-        alert('게시물을 불러오는데 실패했습니다.');
+        const btn = document.getElementById('loadMoreBtn');
+        if (btn) btn.style.display = hasMore?'block':'none';
+    } catch {
+        console.error('게시물 로드 오류');
     } finally {
         isLoading = false;
     }
 }
 
+// 화면에 표시
 function displayPosts(posts) {
-    const container = document.getElementById('postsList');
-    container.innerHTML = '';
-    
-    if (posts.length === 0) {
-        container.innerHTML = '<div class="text-center text-muted py-4">게시물이 없습니다.</div>';
+    const c = document.getElementById('postsList');
+    c.innerHTML = '';
+    if (!posts.length) {
+        c.innerHTML = '<div class="text-center text-muted py-4">게시물이 없습니다.</div>';
         return;
     }
-    
-    // 그리드 컨테이너 생성
-    const gridContainer = document.createElement('div');
-    gridContainer.className = 'posts-grid';
-    
-    posts.forEach(post => {
-        const postElement = createPostElement(post);
-        gridContainer.appendChild(postElement);
-    });
-    
-    container.appendChild(gridContainer);
-    
-    // 더보기 버튼 추가
-    const loadMoreBtn = document.createElement('button');
-    loadMoreBtn.id = 'loadMoreBtn';
-    loadMoreBtn.className = 'btn btn-outline-primary w-100 mt-3';
-    loadMoreBtn.textContent = '더보기';
-    loadMoreBtn.style.display = hasMore ? 'block' : 'none';
-    loadMoreBtn.onclick = () => loadMore();
-    container.appendChild(loadMoreBtn);
+    const grid = document.createElement('div');
+    grid.className = 'posts-grid';
+    posts.forEach(p => grid.appendChild(createPostElement(p)));
+    c.appendChild(grid);
+    const btn = document.createElement('button');
+    btn.id = 'loadMoreBtn';
+    btn.className = 'btn btn-outline-primary w-100 mt-3';
+    btn.textContent = '더보기';
+    btn.onclick = loadMore;
+    btn.style.display = hasMore?'block':'none';
+    c.appendChild(btn);
 }
-
 function appendPosts(posts) {
-    const gridContainer = document.querySelector('.posts-grid');
-    if (!gridContainer) return;
-    
-    posts.forEach(post => {
-        const postElement = createPostElement(post);
-        gridContainer.appendChild(postElement);
-    });
+    const grid = document.querySelector('.posts-grid');
+    if (!grid) return;
+    posts.forEach(p => grid.appendChild(createPostElement(p)));
+}
+function loadMore() {
+    if (!isLoading && hasMore) loadPosts(currentFilter, currentPage+1);
 }
 
-function loadMore() {
-    if (!isLoading && hasMore) {
-        loadPosts(currentFilter, currentPage + 1);
+// 좋아요 정보 로드 (500 시 기본값)
+async function loadLikeInfo(postId) {
+    try {
+        const res = await fetch(`/valuetalk/post/${postId}/likes`);
+        if (!res.ok) throw '';
+        const d = await res.json();
+        document.getElementById(`like-count-${postId}`).textContent = d.count;
+        const icon = document.getElementById(`like-icon-${postId}`);
+        if (d.is_liked) {
+            icon.className = 'fas fa-heart me-1';
+            icon.style.color = '#dc3545';
+        } else {
+            icon.className = 'far fa-heart me-1';
+            icon.style.color = '';
+        }
+    } catch {
+        document.getElementById(`like-count-${postId}`).textContent = '0';
+        const icon = document.getElementById(`like-icon-${postId}`);
+        icon.className = 'far fa-heart me-1';
+        icon.style.color = '';
     }
 }
 
+// 댓글 수 로드 (500 시 숨김)
+async function loadCommentCount(postId) {
+    try {
+        const res = await fetch(`/valuetalk/post/${postId}/comments`);
+        if (!res.ok) throw '';
+        const arr = await res.json();
+        const cnt = arr.length;
+        const cntEl = document.getElementById(`comment-count-${postId}`);
+        const iconEl = document.getElementById(`comment-icon-${postId}`);
+        if (cnt>0) {
+            cntEl.textContent = cnt;
+            cntEl.style.display = 'inline';
+            iconEl.classList.replace('far','fas');
+            iconEl.style.color = '#0d6efd';
+        } else {
+            cntEl.style.display = 'none';
+            iconEl.classList.replace('fas','far');
+            iconEl.style.color = '';
+        }
+    } catch {
+        const cntEl = document.getElementById(`comment-count-${postId}`);
+        if (cntEl) cntEl.style.display = 'none';
+    }
+}
+
+// 포스트 엘리먼트 생성, 클릭 이벤트 등
 function createPostElement(post) {
     const div = document.createElement('div');
     div.className = 'card post-card';
-    div.setAttribute('data-post-id', post.id);
-    
-    const contentClass = 'post-content collapsed';
-    
+    div.dataset.postId = post.id;
     div.innerHTML = `
         <div class="card-body">
             <div class="post-header">
@@ -667,20 +545,19 @@ function createPostElement(post) {
                     <small class="fw-bold">${post.anonymous_id}</small>
                 </div>
                 <div class="post-meta">
-                    ${post.is_owner ? `
-                        <i class="fas fa-trash-alt text-muted me-2" style="cursor: pointer;" 
+                    ${post.is_owner?`
+                        <i class="fas fa-trash-alt text-muted me-2" style="cursor:pointer;"
                            onclick="event.stopPropagation(); showPostOptions('${post.id}')"></i>
-                    ` : ''}
+                    `:''}
                     <div class="post-time text-muted">
                         <small>${formatTime(post.created_at)}</small>
                     </div>
                 </div>
             </div>
             <div class="post-content-wrapper">
-                <div class="${contentClass}" id="content-${post.id}">${post.content}</div>
-                <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')" style="display: none;">
-                    더보기
-                </span>
+                <div class="post-content collapsed" id="content-${post.id}">${post.content}</div>
+                <span class="read-more" onclick="event.stopPropagation(); toggleContent('${post.id}')"
+                      style="display:none;">더보기</span>
             </div>
             <div class="post-footer">
                 <div class="post-actions">
@@ -694,17 +571,18 @@ function createPostElement(post) {
                     </span>
                 </div>
                 <div class="post-stocks">
-                    ${post.stocks.map(stock => `
-                        <a href="#" class="stock-tag" data-stock-code="${stock.code}" onclick="event.preventDefault(); filterByStock('${stock.code}')">#${stock.name}</a>
+                    ${post.stocks.map(s=>`
+                        <a href="#" class="stock-tag" onclick="event.stopPropagation(); filterByStock('${s.code}')">
+                            #${s.name}
+                        </a>
                     `).join('')}
                 </div>
             </div>
-            
-            <div id="comments-${post.id}" class="comments-section" style="display: none;">
+            <div id="comments-${post.id}" class="comments-section" style="display:none;">
                 <div class="comments-list mb-3"></div>
                 <div class="comment-form">
                     <div class="input-group">
-                        <input type="text" class="form-control" placeholder="댓글을 입력하세요..." 
+                        <input type="text" class="form-control" placeholder="댓글을 입력하세요..."
                                id="comment-input-${post.id}">
                         <button class="btn btn-outline-primary" onclick="event.stopPropagation(); submitComment('${post.id}')">
                             <i class="fas fa-paper-plane"></i>
@@ -714,27 +592,19 @@ function createPostElement(post) {
             </div>
         </div>
     `;
+    // read-more 표시 검사
+    setTimeout(()=>{
+        const c = document.getElementById(`content-${post.id}`);
+        const more = c.nextElementSibling;
+        if (c.scrollHeight>c.clientHeight) more.style.display='inline-block';
+    },0);
 
-    // 카드가 렌더링된 후 더보기 버튼 표시 여부 확인
-    setTimeout(() => {
-        const content = document.getElementById(`content-${post.id}`);
-        const readMore = content.nextElementSibling;
-        if (content.scrollHeight > content.clientHeight) {
-            readMore.style.display = 'inline-block';
-        }
-    }, 0);
-
-    // 카드 클릭 이벤트 추가
-    div.addEventListener('click', function(e) {
-        if (e.target.closest('.comment-form') || e.target.closest('.comments-list')) {
-            return;
-        }
-        
-        const commentsSection = document.getElementById(`comments-${post.id}`);
-        if (commentsSection.style.display === 'block') {
-            commentsSection.style.display = 'none';
-        } else {
-            commentsSection.style.display = 'block';
+    div.addEventListener('click', e=>{
+        if (e.target.closest('.comment-form')||e.target.closest('.comments-list')) return;
+        const sec = document.getElementById(`comments-${post.id}`);
+        if (sec.style.display==='block') sec.style.display='none';
+        else {
+            sec.style.display='block';
             loadComments(post.id);
         }
     });
@@ -744,354 +614,137 @@ function createPostElement(post) {
     return div;
 }
 
-async function loadCommentCount(postId) {
-    try {
-        const response = await fetch(`/valuetalk/post/${postId}/comments`);
-        const comments = await response.json();
-        const count = comments.length;
-        
-        const countElement = document.getElementById(`comment-count-${postId}`);
-        const iconElement = document.getElementById(`comment-icon-${postId}`);
-        
-        if (count > 0) {
-            countElement.textContent = count;
-            countElement.style.display = 'inline';
-            iconElement.classList.remove('far');
-            iconElement.classList.add('fas');
-            iconElement.style.color = '#0d6efd';
-        } else {
-            countElement.style.display = 'none';
-            iconElement.classList.remove('fas');
-            iconElement.classList.add('far');
-            iconElement.style.color = '';
-        }
-    } catch (error) {
-        console.error('댓글 수 로드 중 오류:', error);
-    }
+// 시간 포맷터
+function formatTime(ts) {
+    if (!ts) return '';
+    const d = new Date(ts), now=new Date(), diffMs=now-d;
+    if (diffMs<0) return d.toLocaleString('ko-KR', { year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false })
+                       .replace(/\. /g,'년 ').replace('.', '월 ').replace('.', '일 ');
+    const sec=Math.floor(diffMs/1000), min=Math.floor(sec/60), hr=Math.floor(min/60), day=Math.floor(hr/24);
+    if (sec<60) return '방금 전';
+    if (min<60) return `${min}분 전`;
+    if (hr<24) return `${hr}시간 전`;
+    if (day<7) return `${day}일 전`;
+    return d.toLocaleString('ko-KR', { year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false })
+             .replace(/\. /g,'년 ').replace('.', '월 ').replace('.', '일 ');
 }
 
-async function loadLikeInfo(postId) {
-    try {
-        const response = await fetch(`/valuetalk/post/${postId}/likes`);
-        const data = await response.json();
-        
-        const countElement = document.getElementById(`like-count-${postId}`);
-        const iconElement = document.getElementById(`like-icon-${postId}`);
-        
-        countElement.textContent = data.count;
-        
-        if (data.is_liked) {
-            // 아이콘 클래스 완전히 교체
-            iconElement.className = 'fas fa-heart me-1';
-            iconElement.style.color = '#dc3545';
-        } else {
-            // 아이콘 클래스 완전히 교체
-            iconElement.className = 'far fa-heart me-1';
-            iconElement.style.color = '';
-        }
-    } catch (error) {
-        console.error('좋아요 정보 로드 중 오류:', error);
-    }
-}
-
-// 좋아요 버튼 스타일 추가
-const style = document.createElement('style');
-style.textContent = `
-    .like-wrapper {
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        padding: 4px 8px;
-        border-radius: 4px;
-        transition: all 0.2s ease;
-    }
-    .like-wrapper:hover {
-        background-color: rgba(220, 53, 69, 0.1);
-    }
-    .like-wrapper i {
-        font-size: 1.1rem;
-        transition: all 0.2s ease;
-    }
-    .like-wrapper .like-count {
-        font-size: 0.9rem;
-        margin-left: 4px;
-        color: #6c757d;
-    }
-    .like-wrapper:hover i {
-        transform: scale(1.1);
-    }
-`;
-document.head.appendChild(style);
-
-async function likePost(postId) {
-    try {
-        const response = await fetch(`/valuetalk/post/${postId}/like`, {
-            method: 'POST'
-        });
-        
-        if (!response.ok) {
-            throw new Error('좋아요 처리에 실패했습니다.');
-        }
-        
-        const data = await response.json();
-        await loadLikeInfo(postId);
-        
-    } catch (error) {
-        console.error('좋아요 처리 중 오류:', error);
-        alert(error.message);
-    }
-}
-
-function formatTime(timestamp) {
-    if (!timestamp) return '';
-    
-    // ISO 형식의 시간 문자열을 Date 객체로 변환
-    const date = new Date(timestamp);
-    const now = new Date();
-    
-    // 시간 차이 계산 (밀리초)
-    const diffMs = now.getTime() - date.getTime();
-    
-    // 미래 시간인 경우
-    if (diffMs < 0) {
-        return date.toLocaleString('ko-KR', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        }).replace(/\. /g, '년 ').replace('.', '월 ').replace('.', '일 ');
-    }
-    
-    // 과거 시간인 경우
-    const diffSecs = Math.floor(diffMs / 1000);
-    const diffMins = Math.floor(diffSecs / 60);
-    const diffHours = Math.floor(diffMins / 60);
-    const diffDays = Math.floor(diffHours / 24);
-    
-    if (diffSecs < 60) {
-        return '방금 전';
-    } else if (diffMins < 60) {
-        return `${diffMins}분 전`;
-    } else if (diffHours < 24) {
-        return `${diffHours}시간 전`;
-    } else if (diffDays < 7) {
-        return `${diffDays}일 전`;
-    } else {
-        return date.toLocaleString('ko-KR', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            hour12: false
-        }).replace(/\. /g, '년 ').replace('.', '월 ').replace('.', '일 ');
-    }
-}
-
+// 필터 버튼 처리
 async function filterPosts(filter) {
-    try {
-        // 버튼 상태 업데이트
-        const buttons = document.querySelectorAll('.btn-group .btn');
-        buttons.forEach(btn => {
-            if (btn.getAttribute('data-filter') === filter) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-        
-        // 페이지 초기화
-        currentPage = 1;
-        await loadPosts(filter, 1);
-    } catch (error) {
-        console.error('게시물 필터링 중 오류:', error);
-        alert(error.message);
-    }
+    document.querySelectorAll('.btn-group .btn').forEach(btn=>{
+        btn.classList.toggle('active', btn.getAttribute('data-filter')===filter);
+    });
+    currentPage=1;
+    await loadPosts(filter,1);
 }
 
+// 종목별 필터
 async function filterByStock(code) {
-    try {
-        // 페이지 초기화
-        currentPage = 1;
-        await loadPosts('stock', 1, code);
-        
-        // 필터 버튼 상태 업데이트
-        document.querySelectorAll('.filter-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
-        
-        // 제목 업데이트
-        const stockName = document.querySelector(`[data-stock-code="${code}"]`)?.textContent.replace('#', '') || code;
-        const titleElement = document.querySelector('.display-title');
-        if (titleElement) {
-            titleElement.textContent = `${stockName} 관련 게시글`;
-        }
-    } catch (error) {
-        console.error('Error:', error);
-        alert('게시물을 불러오는데 실패했습니다.');
-    }
+    currentPage=1;
+    await loadPosts('stock',1,code);
 }
 
-async function toggleComments(postId) {
-    const commentsSection = document.getElementById(`comments-${postId}`);
-    if (commentsSection.style.display === 'none') {
-        commentsSection.style.display = 'block';
-        await loadComments(postId);
-    } else {
-        commentsSection.style.display = 'none';
-    }
-}
-
+// 댓글 로드
 async function loadComments(postId) {
     try {
-        const response = await fetch(`/valuetalk/post/${postId}/comments`);
-        const comments = await response.json();
-        
-        const commentsList = document.querySelector(`#comments-${postId} .comments-list`);
-        commentsList.innerHTML = '';
-        
-        // 댓글을 오래된 순으로 정렬 (최신 댓글이 아래에 표시되도록)
-        comments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-        
-        comments.forEach(comment => {
-            const commentElement = createCommentElement(comment);
-            commentsList.appendChild(commentElement);
-        });
-    } catch (error) {
-        console.error('댓글 로드 중 오류:', error);
+        const res = await fetch(`/valuetalk/post/${postId}/comments`);
+        if (!res.ok) throw '';
+        const arr = await res.json();
+        const list = document.querySelector(`#comments-${postId} .comments-list`);
+        list.innerHTML = '';
+        arr.sort((a,b)=>new Date(a.created_at)-new Date(b.created_at));
+        arr.forEach(c=> list.appendChild(createCommentElement(c)));
+    } catch {
+        console.error('댓글 로드 실패');
     }
 }
-
-function createCommentElement(comment) {
+function createCommentElement(c) {
     const div = document.createElement('div');
     div.className = 'comment-item mb-2';
     div.innerHTML = `
         <div class="d-flex justify-content-between align-items-start">
-            <small class="text-muted fw-bold">${comment.anonymous_id}</small>
+            <small class="text-muted fw-bold">${c.anonymous_id}</small>
             <div class="d-flex align-items-center">
-                <small class="text-muted me-2">${formatTime(comment.created_at)}</small>
-                ${comment.is_owner ? `
-                    <i class="fas fa-ellipsis-v text-muted" style="cursor: pointer;" 
-                       onclick="showCommentOptions('${comment.id}')"></i>
-                ` : ''}
+                <small class="text-muted me-2">${formatTime(c.created_at)}</small>
+                ${c.is_owner?`<i class="fas fa-ellipsis-v text-muted" style="cursor:pointer;"
+                    onclick="showCommentOptions('${c.id}')"></i>`:''}
             </div>
         </div>
-        <p class="mb-1">${comment.content}</p>
+        <p class="mb-1">${c.content}</p>
     `;
     return div;
 }
 
+// 댓글 작성
 async function submitComment(postId) {
     const input = document.getElementById(`comment-input-${postId}`);
     const content = input.value.trim();
-    
-    if (!content) {
-        alert('댓글 내용을 입력해주세요.');
-        return;
-    }
-
+    if (!content) return alert('댓글 내용을 입력해주세요.');
     try {
-        const anonymousId = await getAnonymousId();
-        if (!anonymousId) {
-            throw new Error('익명 ID를 가져오는데 실패했습니다.');
-        }
-
-        const response = await fetch(`/valuetalk/post/${postId}/comment`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ 
-                content,
-                anonymous_id: anonymousId
-            })
+        const anonymousId = localStorage.getItem('anonymousId');
+        const res = await fetch(`/valuetalk/post/${postId}/comment`, {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ content, anonymous_id: anonymousId })
         });
-
-        if (response.ok) {
-            input.value = '';
-            await loadComments(postId);
-            await loadCommentCount(postId);  // 댓글 수 업데이트
-        } else {
-            const data = await response.json();
-            throw new Error(data.error || '댓글 작성에 실패했습니다.');
-        }
-    } catch (error) {
-        console.error('댓글 작성 중 오류:', error);
-        alert(error.message);
+        if (!res.ok) throw '';
+        input.value='';
+        await loadComments(postId);
+        await loadCommentCount(postId);
+    } catch {
+        alert('댓글 작성 실패');
     }
 }
 
-function showCommentOptions(commentId) {
-    if (confirm('이 댓글을 삭제하시겠습니까?')) {
-        deleteComment(commentId);
-    }
+// 옵션: 삭제
+function showPostOptions(id) {
+    if (confirm('이 게시물을 삭제하시겠습니까?')) deletePost(id);
 }
-
-async function deleteComment(commentId) {
+async function deletePost(id) {
     try {
-        const response = await fetch(`/valuetalk/comment/${commentId}`, {
-            method: 'DELETE'
-        });
-
-        if (response.ok) {
-            // 댓글 목록 새로고침
-            const postId = document.querySelector(`[data-comment-id="${commentId}"]`).closest('.post-card').dataset.postId;
-            await loadComments(postId);
-        } else {
-            const data = await response.json();
-            alert(data.error || '댓글 삭제에 실패했습니다.');
-        }
-    } catch (error) {
-        console.error('댓글 삭제 중 오류:', error);
-        alert('댓글 삭제 중 오류가 발생했습니다.');
+        const res = await fetch(`/valuetalk/post/${id}`, { method:'DELETE' });
+        if (!res.ok) throw '';
+        loadPosts();
+    } catch {
+        alert('삭제 실패');
     }
 }
-
-function showPostOptions(postId) {
-    if (confirm('이 게시물을 삭제하시겠습니까?')) {
-        deletePost(postId);
-    }
+function showCommentOptions(id) {
+    if (confirm('이 댓글을 삭제하시겠습니까?')) deleteComment(id);
 }
-
-async function deletePost(postId) {
+async function deleteComment(id) {
     try {
-        console.log('Attempting to delete post:', postId);
-        const response = await fetch(`/valuetalk/post/${postId}`, {
-            method: 'DELETE'
-        });
-
-        const data = await response.json();
-        console.log('Delete response:', data);
-
-        if (response.ok) {
-            console.log('Post deleted successfully');
-            // 게시물 목록 새로고침
-            loadPosts();
-        } else {
-            console.error('Delete failed:', data.error);
-            alert(data.error || '게시물 삭제에 실패했습니다.');
-        }
-    } catch (error) {
-        console.error('게시물 삭제 중 오류:', error);
-        alert('게시물 삭제 중 오류가 발생했습니다.');
+        const res = await fetch(`/valuetalk/comment/${id}`, { method:'DELETE' });
+        if (!res.ok) throw '';
+        // 다시 로드
+        document.querySelector(`[data-comment-id="${id}"]`)?.closest('.post-card')?.click();
+    } catch {
+        alert('댓글 삭제 실패');
     }
 }
 
+// 좋아요 토글
+async function likePost(postId) {
+    try {
+        const res = await fetch(`/valuetalk/post/${postId}/like`, { method:'POST' });
+        if (!res.ok) throw '';
+        await loadLikeInfo(postId);
+    } catch {
+        alert('좋아요 실패');
+    }
+}
+
+// 본문 토글
 function toggleContent(postId) {
-    const content = document.getElementById(`content-${postId}`);
-    const readMore = content.nextElementSibling;
-    
-    if (content.classList.contains('collapsed')) {
-        // 더보기
-        content.classList.remove('collapsed');
-        readMore.textContent = '접기';
+    const el = document.getElementById(`content-${postId}`);
+    const more = el.nextElementSibling;
+    if (el.classList.contains('collapsed')) {
+        el.classList.remove('collapsed');
+        more.textContent = '접기';
     } else {
-        // 접기
-        content.classList.add('collapsed');
-        readMore.textContent = '더보기';
+        el.classList.add('collapsed');
+        more.textContent = '더보기';
     }
 }
 </script>
-{% endblock %} 
+{% endblock %}
