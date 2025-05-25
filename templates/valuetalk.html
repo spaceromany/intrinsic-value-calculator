@@ -289,6 +289,10 @@
 
 <script>
 let selectedStock = null;  // selectedStocks Set을 단일 변수로 변경
+let currentPage = 1;
+let hasMore = false;
+let isLoading = false;
+let currentFilter = 'all';
 
 // 디바운스 함수
 function debounce(func, wait) {
@@ -302,6 +306,16 @@ function debounce(func, wait) {
         timeout = setTimeout(later, wait);
     };
 }
+
+// 스크롤 이벤트 핸들러를 디바운스 처리
+const debouncedLoadMore = debounce(() => {
+    if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 1000) {
+        loadMore();
+    }
+}, 200);
+
+// 스크롤 이벤트 리스너 추가
+window.addEventListener('scroll', debouncedLoadMore);
 
 // 익명 ID 표시 함수
 async function displayAnonymousId() {
@@ -523,13 +537,46 @@ async function submitPost() {
     }
 }
 
-async function loadPosts(filter = 'all') {
+async function loadPosts(filter = 'all', page = 1) {
+    if (isLoading) return;
+    isLoading = true;
+    
     try {
-        const response = await fetch(`/valuetalk/posts?filter=${filter}`);
-        const posts = await response.json();
-        displayPosts(posts);
+        currentFilter = filter;
+        let url = `/valuetalk/posts?filter=${filter}&page=${page}`;
+        
+        if (filter === 'following') {
+            const watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
+            if (watchlist.length === 0) {
+                alert('관심종목이 없습니다.');
+                document.querySelector('[data-filter="all"]').click();
+                return;
+            }
+            url += `&watchlist=${encodeURIComponent(JSON.stringify(watchlist))}`;
+        }
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        if (page === 1) {
+            displayPosts(data.posts);
+        } else {
+            appendPosts(data.posts);
+        }
+        
+        hasMore = data.has_more;
+        currentPage = page;
+        
+        // 더보기 버튼 표시/숨김
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        if (loadMoreBtn) {
+            loadMoreBtn.style.display = hasMore ? 'block' : 'none';
+        }
     } catch (error) {
         console.error('게시물 로드 중 오류:', error);
+        alert('게시물을 불러오는데 실패했습니다.');
+    } finally {
+        isLoading = false;
     }
 }
 
@@ -552,6 +599,31 @@ function displayPosts(posts) {
     });
     
     container.appendChild(gridContainer);
+    
+    // 더보기 버튼 추가
+    const loadMoreBtn = document.createElement('button');
+    loadMoreBtn.id = 'loadMoreBtn';
+    loadMoreBtn.className = 'btn btn-outline-primary w-100 mt-3';
+    loadMoreBtn.textContent = '더보기';
+    loadMoreBtn.style.display = hasMore ? 'block' : 'none';
+    loadMoreBtn.onclick = () => loadMore();
+    container.appendChild(loadMoreBtn);
+}
+
+function appendPosts(posts) {
+    const gridContainer = document.querySelector('.posts-grid');
+    if (!gridContainer) return;
+    
+    posts.forEach(post => {
+        const postElement = createPostElement(post);
+        gridContainer.appendChild(postElement);
+    });
+}
+
+function loadMore() {
+    if (!isLoading && hasMore) {
+        loadPosts(currentFilter, currentPage + 1);
+    }
 }
 
 function createPostElement(post) {
@@ -803,28 +875,9 @@ async function filterPosts(filter) {
             }
         });
         
-        let url = '/valuetalk/posts';
-        if (filter === 'following') {
-            const watchlist = JSON.parse(localStorage.getItem('watchlist') || '[]');
-            if (watchlist.length === 0) {
-                alert('관심종목이 없습니다.');
-                document.querySelector('[data-filter="all"]').click();
-                return;
-            }
-            url += `?filter=following&watchlist=${encodeURIComponent(JSON.stringify(watchlist))}`;
-        } else if (filter === 'my') {
-            url += '?filter=my';
-        } else {
-            url += `?filter=${filter}`;
-        }
-        
-        const response = await fetch(url);
-        if (!response.ok) {
-            throw new Error('게시물을 불러오는데 실패했습니다.');
-        }
-        
-        const posts = await response.json();
-        displayPosts(posts);
+        // 페이지 초기화
+        currentPage = 1;
+        await loadPosts(filter, 1);
     } catch (error) {
         console.error('게시물 필터링 중 오류:', error);
         alert(error.message);
@@ -833,11 +886,9 @@ async function filterPosts(filter) {
 
 async function filterByStock(code) {
     try {
-        const response = await fetch(`/valuetalk/posts?filter=stock&code=${code}`);
-        if (!response.ok) throw new Error('게시물을 불러오는데 실패했습니다.');
-        
-        const posts = await response.json();
-        displayPosts(posts);
+        // 페이지 초기화
+        currentPage = 1;
+        await loadPosts('stock', 1, code);
         
         // 필터 버튼 상태 업데이트
         document.querySelectorAll('.filter-btn').forEach(btn => {

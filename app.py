@@ -409,6 +409,8 @@ def get_posts():
     try:
         filter_type = request.args.get('filter', 'all')
         device_id = get_device_id()
+        page = request.args.get('page', 1, type=int)
+        per_page = 20
         
         # 기본 쿼리
         query = supabase.table('posts').select('*').order('created_at', desc=True)
@@ -472,7 +474,11 @@ def get_posts():
             result = query.execute()
         
         if not result.data:
-            return jsonify([])
+            return jsonify({
+                'posts': [],
+                'has_more': False,
+                'total_count': 0
+            })
         
         # 종목 정보 가져오기
         stock_codes = set()
@@ -501,8 +507,18 @@ def get_posts():
                                 for code in post['stocks']]
             # 현재 디바이스의 게시물인지 표시
             post['is_owner'] = post['device_id'] == device_id
-            
-        return jsonify(result.data)
+        
+        # 페이지네이션 적용
+        total_count = len(result.data)
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        paginated_posts = result.data[start_idx:end_idx]
+        
+        return jsonify({
+            'posts': paginated_posts,
+            'has_more': end_idx < total_count,
+            'total_count': total_count
+        })
 
     except Exception as e:
         print(f"게시물 조회 중 오류: {str(e)}")
