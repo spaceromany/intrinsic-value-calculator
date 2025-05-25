@@ -5,8 +5,6 @@ import requests
 from lxml import html
 import pandas as pd
 import FinanceDataReader as fdr
-import requests
-import pandas as pd
 from datetime import datetime, timedelta
 import json
 import os
@@ -178,6 +176,8 @@ def calculate_intrinsic_value(df: pd.DataFrame, treasury_stock_info: dict = None
     if df.empty:
         return None
         
+    if df['EPS'].isna().any() and df['BPS'].isna().any() :
+        return None
     # EPS 가중평균 계산
     eps_values = df['EPS'].values
     if len(eps_values) != 3:
@@ -351,12 +351,12 @@ def analyze_stock(ticker: str) -> dict:
         
         # 내재가치 계산
         intrinsic_value = calculate_intrinsic_value(df, treasury_stock)
-        
+
+
         # 안전마진 계산
         safety_margin = None
         if current_price and intrinsic_value:
             safety_margin = ((intrinsic_value - current_price) / current_price) * 100
-        
         # 재무지표 데이터 포맷팅
         historical_data = {}
         for _, row in df.iterrows():
@@ -378,6 +378,7 @@ def analyze_stock(ticker: str) -> dict:
         }
         
     except Exception as e:
+        print(f"종목 {ticker} 분석 중 오류 발생: {e}")
         return {'error': str(e)}
 
 def analyze_stock_wrapper(args):
@@ -401,8 +402,10 @@ def analyze_stock_wrapper(args):
 
 def margin_key(x):
     m = x['safety_margin']
-    # nan이면 아주 작은 값으로 치환해서 맨 뒤로 보내기
-    return float('-inf') if math.isnan(m) else m
+    # None이나 nan이면 아주 작은 값으로 치환해서 맨 뒤로 보내기
+    if m is None or math.isnan(m):
+        return float('-inf')
+    return m
 
 def analyze_all_stocks(limit: int = 30) -> list:
     """
@@ -447,8 +450,9 @@ def analyze_all_stocks(limit: int = 30) -> list:
         
         try:
             result = analyze_stock(code)
+            print(f"종목 {code} ({name}) 분석 완료")
             time.sleep(0.2)
-            if not result.get('error') and result.get('safety_margin') is not None:
+            if not result.get('error') :
                 stock_data = {
                     'code': code,
                     'name': result['stock_name'],
@@ -458,8 +462,7 @@ def analyze_all_stocks(limit: int = 30) -> list:
                     'treasury_ratio': result['treasury_ratio'],
                     'dividend_yield': result['dividend_yield'],
                     'last_updated': current_time.isoformat()  # 업데이트 시간 저장
-                }
-                
+                } 
                 # 기존 결과에서 해당 종목 찾아 업데이트
                 if existing_stock:
                     for j, item in enumerate(results):
@@ -468,7 +471,6 @@ def analyze_all_stocks(limit: int = 30) -> list:
                             break
                 else:
                     results.append(stock_data)
-                
                 # 매 10개 종목마다 파일 저장
                 if (i + 1) % 10 == 0:
                     # 안전마진 기준으로 정렬
@@ -476,8 +478,6 @@ def analyze_all_stocks(limit: int = 30) -> list:
                     with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
                         json.dump(results, f, ensure_ascii=False, indent=2)
                     print(f"\n{i + 1}/{total_stocks} 종목 분석 완료")
-                    # print(f"건너뛴 종목 수: {skipped_count}")
-                    
         except Exception as e:
             print(f"\n종목 {code} ({name}) 분석 중 오류 발생: {e}")
             # 오류 발생 시에도 현재까지의 결과 저장

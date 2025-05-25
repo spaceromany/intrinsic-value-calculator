@@ -49,20 +49,6 @@ def load_quotes():
         print(f"격언 데이터 로드 중 오류 발생: {e}")
         return []
 
-def background_update():
-    """백그라운드에서 주기적으로 데이터를 업데이트하는 함수"""
-    while True:
-        try:
-            print(f"[{datetime.now()}] 데이터 업데이트 시작...")
-            load_krx_stocks()
-            analyze_all_stocks()
-            print(f"[{datetime.now()}] 데이터 업데이트 완료")
-        except Exception as e:
-            print(f"[{datetime.now()}] 데이터 업데이트 중 오류 발생: {str(e)}")
-        
-        # 4시간 대기
-        time.sleep(3600*4)
-
 @app.route('/')
 def index():
     quotes = load_quotes()
@@ -124,8 +110,8 @@ def filter_stocks():
             stocks = json.load(f)
         print(f"총 {len(stocks)}개의 종목 데이터를 읽었습니다.")
         
-        # 안전마진 기준으로 정렬
-        stocks.sort(key=lambda x: float('-inf') if math.isnan(x.get('safety_margin', float('-inf'))) else x.get('safety_margin', float('-inf')), reverse=True)
+        # 안전마진 기준으로 정렬 (None이나 NaN은 맨 뒤로)
+        stocks.sort(key=lambda x: float('-inf') if x.get('safety_margin') is None or math.isnan(x.get('safety_margin', float('-inf'))) else x.get('safety_margin', float('-inf')), reverse=True)
         print("안전마진 기준으로 정렬 완료")
         
         # 배당수익률 필터링
@@ -784,10 +770,29 @@ def get_post_likes(post_id):
         print(f"좋아요 정보 조회 중 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+@app.route('/api/update-data', methods=['POST'])
+def update_data():
+    """데이터 업데이트 API"""
+    try:
+
+        print(f"[{datetime.now()}] 데이터 업데이트 시작...")
+        load_krx_stocks()
+        print(f"KRX 데이터 업데이트 완료...")
+        analyze_all_stocks()
+        print(f"[{datetime.now()}] 데이터 업데이트 완료")
+        
+        return jsonify({
+            'status': 'success',
+            'message': '데이터 업데이트가 완료되었습니다.',
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        print(f"[{datetime.now()}] 데이터 업데이트 중 오류 발생: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': str(e),
+            'timestamp': datetime.now().isoformat()
+        }), 500
+
 if __name__ == '__main__':
-    # 백그라운드 업데이트 스레드 시작
-    update_thread = threading.Thread(target=background_update, daemon=True)
-    update_thread.start()
-    
-    # Flask 앱 실행
     app.run(host='0.0.0.0', port=7777, debug=False) 
