@@ -1,101 +1,9 @@
-/* 히어로 섹션 */
-.hero-section {
-    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
-    color: white;
-    padding: 4rem 2rem;
-    margin-bottom: 2rem;
-    border-radius: 1rem;
-    text-align: center;
+/* 기본 스타일 */
+body { 
+    background-color: #f8f9fa;
 }
 
-.hero-title {
-    font-size: 2.5rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-}
-
-.hero-subtitle {
-    font-size: 1.2rem;
-    opacity: 0.9;
-}
-
-/* 기능 카드 */
-.feature-card {
-    background: white;
-    padding: 2rem;
-    margin-bottom: 1rem;
-    border-radius: 1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transition: all 0.3s ease;
-    height: 100%;
-}
-
-.feature-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
-}
-
-.feature-icon {
-    font-size: 2.5rem;
-    color: #0d6efd;
-    margin-bottom: 1.5rem;
-}
-
-.feature-title {
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-    color: #2c3e50;
-}
-
-.feature-description {
-    color: #6c757d;
-    line-height: 1.6;
-}
-
-/* 인용구 카드 */
-.quote-card {
-    background: white;
-    padding: 2rem;
-    margin-bottom: 1rem;
-    border-radius: 1rem;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    height: 100%;
-}
-
-.quote-text {
-    font-size: 1.2rem;
-    font-style: italic;
-    color: #2c3e50;
-    margin-bottom: 1rem;
-    line-height: 1.6;
-}
-
-.quote-author {
-    color: #6c757d;
-    font-weight: 500;
-    margin-bottom: 0;
-}
-
-.quote-source {
-    font-size: 0.9rem;
-    color: #6c757d;
-}
-
-/* 입력 그룹 */
-.input-group {
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-}
-
-.input-group .form-control {
-    border-right: none;
-}
-
-.input-group .btn {
-    border-left: none;
-}
-
-/* 주식 카드 */
+/* 주식 카드 공통 스타일 */
 .stock-card {
     cursor: pointer;
     transition: all 0.3s ease;
@@ -110,7 +18,7 @@
     box-shadow: 0 8px 20px rgba(0,0,0,0.1);
 }
 
-/* 주식 상세 정보 */
+/* 주식 상세 정보 공통 스타일 */
 .stock-details {
     display: none;
     margin-top: 10px;
@@ -131,7 +39,7 @@
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* 관심종목 아이콘 */
+/* 관심종목 아이콘 공통 스타일 */
 .heart-icon {
     cursor: pointer;
     transition: all 0.2s ease;
@@ -152,7 +60,7 @@
     font-size: 1.2rem;
 }
 
-/* 안전마진 표시 */
+/* 안전마진 표시 공통 스타일 */
 .safety-margin-positive {
     color: #198754;
     font-weight: 600;
@@ -163,7 +71,7 @@
     font-weight: 600;
 }
 
-/* 상세 정보 아이템 */
+/* 상세 정보 아이템 공통 스타일 */
 .detail-item {
     display: flex;
     flex-direction: column;
@@ -185,7 +93,7 @@
     color: #2c3e50;
 }
 
-/* 마지막 업데이트 */
+/* 마지막 업데이트 공통 스타일 */
 .last-update {
     color: #6c757d;
     font-size: 0.9em;
@@ -194,7 +102,7 @@
     border-radius: 0.5rem;
 }
 
-/* 카드 제목 */
+/* 카드 제목 공통 스타일 */
 .card-title {
     font-size: 1.1rem;
     margin-bottom: 0.75rem;
@@ -205,7 +113,7 @@
     color: #6c757d;
 }
 
-/* 반응형 스타일 */
+/* 반응형 스타일 공통 */
 @media (max-width: 768px) {
     .container {
         padding: 0 10px;
