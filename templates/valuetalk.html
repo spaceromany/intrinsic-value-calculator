@@ -317,21 +317,69 @@ const debouncedLoadMore = debounce(() => {
 // 스크롤 이벤트 리스너 추가
 window.addEventListener('scroll', debouncedLoadMore);
 
-// 익명 ID 표시 함수
-async function displayAnonymousId() {
-    const anonymousId = await getAnonymousId();
-    const displayElement = document.getElementById('currentAnonymousId');
-    if (anonymousId) {
-        displayElement.textContent = anonymousId;
-    } else {
-        displayElement.textContent = 'ID를 가져올 수 없습니다';
+// 익명 ID 새로고침 함수
+async function refreshAnonymousId() {
+    try {
+        const response = await fetch('/valuetalk/anonymous-id', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            const newAnonymousId = data.anonymous_id;
+            
+            // 로컬 스토리지에 새 ID 저장
+            localStorage.setItem('anonymousId', newAnonymousId);
+            
+            // 화면에 새 ID 표시
+            const displayElement = document.getElementById('currentAnonymousId');
+            if (displayElement) {
+                displayElement.textContent = newAnonymousId;
+            }
+        } else {
+            throw new Error('익명 ID를 가져오는데 실패했습니다.');
+        }
+    } catch (error) {
+        console.error('익명 ID 새로고침 중 오류:', error);
+        alert('익명 ID를 새로고침하는데 실패했습니다.');
     }
 }
 
-// 익명 ID 새로고침 함수
-async function refreshAnonymousId() {
-    localStorage.removeItem('anonymousId');  // 기존 ID 제거
-    await displayAnonymousId();  // 새 ID 표시
+// 익명 ID 표시 함수
+async function displayAnonymousId() {
+    try {
+        const anonymousId = await getAnonymousId();
+        const displayElement = document.getElementById('currentAnonymousId');
+        if (displayElement) {
+            displayElement.textContent = anonymousId || 'ID를 가져올 수 없습니다';
+        }
+    } catch (error) {
+        console.error('익명 ID 표시 중 오류:', error);
+        const displayElement = document.getElementById('currentAnonymousId');
+        if (displayElement) {
+            displayElement.textContent = 'ID를 가져올 수 없습니다';
+        }
+    }
+}
+
+// 익명 ID 관리 함수
+async function getAnonymousId() {
+    let anonymousId = localStorage.getItem('anonymousId');
+    if (!anonymousId) {
+        try {
+            const response = await fetch('/valuetalk/anonymous-id', {
+                method: 'POST'
+            });
+            if (response.ok) {
+                const data = await response.json();
+                anonymousId = data.anonymous_id;
+                localStorage.setItem('anonymousId', anonymousId);
+            }
+        } catch (error) {
+            console.error('익명 ID 발급 중 오류:', error);
+        }
+    }
+    return anonymousId;
 }
 
 // 페이지 로드 시 익명 ID 표시
@@ -422,27 +470,6 @@ function removeSelectedStock() {
     document.getElementById('stockSearchSection').style.display = 'block';
     document.getElementById('stockSearchInput').value = '';
     document.getElementById('stockSearchResults').style.display = 'none';
-}
-
-// 익명 ID 관리 함수
-async function getAnonymousId() {
-    let anonymousId = localStorage.getItem('anonymousId');
-    if (!anonymousId) {
-        // 서버에서 익명 ID 발급받기
-        try {
-            const response = await fetch('/valuetalk/anonymous-id', {
-                method: 'POST'
-            });
-            if (response.ok) {
-                const data = await response.json();
-                anonymousId = data.anonymous_id;
-                localStorage.setItem('anonymousId', anonymousId);
-            }
-        } catch (error) {
-            console.error('익명 ID 발급 중 오류:', error);
-        }
-    }
-    return anonymousId;
 }
 
 // 글자수 카운터 업데이트 함수
