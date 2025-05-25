@@ -1,0 +1,93 @@
+/* 기본 텍스트 색상 */
+.text-success { color: #198754 !important; }
+.text-danger { color: #dc3545 !important; }
+
+/* 네비게이션 바 */
+.navbar {
+    padding: 1rem 0;
+    background: linear-gradient(to right, #ffffff, #f8f9fa);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.navbar-brand {
+    font-weight: bold;
+    color: #0d6efd !important;
+    margin-right: 2rem;
+}
+
+.navbar-brand i {
+    font-size: 1.5rem;
+}
+
+.navbar-brand .brand-text {
+    font-size: 1.2rem;
+    font-weight: 600;
+    background: linear-gradient(45deg, #0d6efd, #0a58ca);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.nav-link {
+    color: #495057 !important;
+    font-weight: 500;
+    padding: 0.5rem 1rem !important;
+    transition: all 0.3s ease;
+}
+
+.nav-link:hover {
+    color: #0d6efd !important;
+    transform: translateY(-1px);
+}
+
+.nav-link.active {
+    color: #0d6efd !important;
+    border-bottom: 2px solid #0d6efd;
+}
+
+/* 인용구 섹션 */
+.quote-section {
+    max-width: 500px;
+    font-size: 0.9rem;
+    color: #495057;
+    border-left: 3px solid #0d6efd;
+    padding-left: 1rem;
+    margin-left: auto;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-top: 0.25rem;
+    padding-bottom: 0.25rem;
+}
+
+.quote-section blockquote {
+    margin: 0;
+}
+
+.quote-section p {
+    font-style: italic;
+    margin-bottom: 0.15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.quote-section footer {
+    font-size: 0.8rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 0.15rem;
+}
+
+/* BETA 뱃지 */
+.beta-badge {
+    font-size: 0.6em;
+    vertical-align: super;
+}
+
+/* 반응형 스타일 */
+@media (max-width: 992px) {
+    .quote-section {
+        display: none;
+    }
+}

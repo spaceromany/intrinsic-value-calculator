@@ -20,76 +20,16 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <style>
-        .text-success { color: #198754 !important; }
-        .text-danger { color: #dc3545 !important; }
-        .navbar {
-            padding: 1rem 0;
-            background: linear-gradient(to right, #ffffff, #f8f9fa);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        .navbar-brand {
-            font-weight: bold;
-            color: #0d6efd !important;
-            margin-right: 2rem;
-        }
-        .nav-link {
-            color: #495057 !important;
-            font-weight: 500;
-            padding: 0.5rem 1rem !important;
-            transition: all 0.3s ease;
-        }
-        .nav-link:hover {
-            color: #0d6efd !important;
-            transform: translateY(-1px);
-        }
-        .nav-link.active {
-            color: #0d6efd !important;
-            border-bottom: 2px solid #0d6efd;
-        }
-        .quote-section {
-            max-width: 500px;
-            font-size: 0.9rem;
-            color: #495057;
-            border-left: 3px solid #0d6efd;
-            padding-left: 1rem;
-            margin-left: auto;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            padding-top: 0.25rem;
-            padding-bottom: 0.25rem;
-        }
-        .quote-section blockquote {
-            margin: 0;
-        }
-        .quote-section p {
-            font-style: italic;
-            margin-bottom: 0.15rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .quote-section footer {
-            font-size: 0.8rem;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-top: 0.15rem;
-        }
-        @media (max-width: 992px) {
-            .quote-section {
-                display: none;
-            }
-        }
-    </style>
+    <!-- Base CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    {% block extra_css %}{% endblock %}
 </head>
 <body>
     <nav class="navbar navbar-light">
         <div class="container">
             <a class="navbar-brand d-flex align-items-center" href="/">
-                <i class="fas fa-chart-line text-primary me-2" style="font-size: 1.5rem;"></i>
-                <span class="d-none d-sm-inline" style="font-size: 1.2rem; font-weight: 600; background: linear-gradient(45deg, #0d6efd, #0a58ca); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">Value</span>
+                <i class="fas fa-chart-line text-primary me-2"></i>
+                <span class="d-none d-sm-inline brand-text">Value</span>
             </a>
             <div class="d-flex align-items-center">
                 <ul class="navbar-nav d-flex flex-row me-3">
@@ -102,7 +42,7 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/valuetalk">
                             가치톡!
-                            <span class="badge bg-primary ms-1" style="font-size: 0.6em; vertical-align: super;">BETA</span>
+                            <span class="badge bg-primary ms-1 beta-badge">BETA</span>
                         </a>
                     </li>
                 </ul>

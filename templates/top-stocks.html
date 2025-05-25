@@ -80,128 +80,9 @@
     </div>
 </div>
 
-<style>
-    body { 
-        background-color: #f8f9fa;
-    }
-    .stock-card {
-        cursor: pointer;
-        transition: all 0.3s ease;
-        height: 100%;
-        border: none;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        background: linear-gradient(to bottom right, #ffffff, #f8f9fa);
-    }
-    .stock-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 20px rgba(0,0,0,0.1);
-    }
-    .stock-details {
-        display: none;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #dee2e6;
-        background-color: #f8f9fa;
-        border-radius: 0.5rem;
-        padding: 1rem;
-    }
-    .stock-details.show {
-        display: block;
-        animation: fadeIn 0.3s ease-in-out;
-    }
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .heart-icon {
-        cursor: pointer;
-        transition: all 0.2s ease;
-        position: absolute;
-        top: 10px;
-        right: 10px;
-        background-color: rgba(255, 255, 255, 0.9);
-        padding: 5px;
-        border-radius: 50%;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    }
-    .heart-icon:hover {
-        transform: scale(1.1);
-    }
-    .heart-icon i {
-        font-size: 1.2rem;
-    }
-    .safety-margin-positive {
-        color: #198754;
-        font-weight: 600;
-    }
-    .safety-margin-negative {
-        color: #dc3545;
-        font-weight: 600;
-    }
-    .detail-item {
-        display: flex;
-        flex-direction: column;
-        margin-bottom: 0.75rem;
-        padding: 0.5rem;
-        background-color: white;
-        border-radius: 0.5rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    .detail-label {
-        font-size: 0.875rem;
-        color: #6c757d;
-        margin-bottom: 0.25rem;
-    }
-    .detail-value {
-        font-weight: 600;
-        color: #2c3e50;
-    }
-    .rank-badge {
-        font-size: 0.9rem;
-        padding: 0.35em 0.65em;
-        background: linear-gradient(45deg, #0d6efd, #0a58ca);
-    }
-    .last-update {
-        color: #6c757d;
-        font-size: 0.9em;
-        background-color: #f8f9fa;
-        padding: 0.5rem 1rem;
-        border-radius: 0.5rem;
-    }
-    .card-title {
-        font-size: 1.1rem;
-        margin-bottom: 0.75rem;
-    }
-    .card-title small {
-        font-size: 0.85rem;
-        color: #6c757d;
-    }
-    .btn-group .btn-outline-primary {
-        border-width: 2px;
-    }
-    .btn-group .btn-outline-primary.active {
-        background-color: #0d6efd;
-        color: white;
-        border-color: #0d6efd;
-    }
-    @media (max-width: 768px) {
-        .container {
-            padding: 0 10px;
-        }
-        .col-md-4 {
-            padding: 0 5px;
-        }
-        .card-body {
-            padding: 1rem;
-        }
-        .btn-group {
-            margin-bottom: 10px;
-        }
-        .stock-card {
-            margin-bottom: 1rem;
-        }
-    }
-</style>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/top-stocks.css') }}">
+{% endblock %}
 
 <script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
 <script>
@@ -373,13 +254,7 @@ function filterByDividend(dividend) {
     document.querySelectorAll('.btn-group .btn-outline-primary[data-dividend]').forEach(btn => {
         btn.classList.remove('active');
     });
-    
-    let selectedButton;
-    if (dividend === null) {
-        selectedButton = document.querySelector('.btn-group .btn-outline-primary[data-dividend=""]');
-    } else {
-        selectedButton = document.querySelector(`.btn-group .btn-outline-primary[data-dividend="${dividend}"]`);
-    }
+    const selectedButton = document.querySelector(`.btn-group .btn-outline-primary[data-dividend="${dividend}"]`);
     if (selectedButton) {
         selectedButton.classList.add('active');
     }
@@ -387,21 +262,17 @@ function filterByDividend(dividend) {
     // 모바일 버전: 드롭다운 텍스트 업데이트
     const dropdownText = document.getElementById('currentDividendFilter');
     if (dropdownText) {
-        if (dividend === null) {
-            dropdownText.textContent = '전체';
-        } else {
-            dropdownText.textContent = `${dividend}% 이상`;
-        }
+        dropdownText.textContent = dividend === null ? '전체' : `${dividend}% 이상`;
     }
     
-    // 현재 선택된 Top 값 유지하면서 데이터 로드
-    const currentLimit = document.getElementById('currentLimit').textContent;
-    loadStocks(currentLimit);
+    loadStocks();
 }
 
 function toggleDetails(code) {
-    const details = document.getElementById(`details-${code}`);
-    details.classList.toggle('show');
+    const detailsElement = document.getElementById(`details-${code}`);
+    if (detailsElement) {
+        detailsElement.classList.toggle('show');
+    }
 }
 
 function toggleWatchlist(code) {
@@ -417,101 +288,13 @@ function toggleWatchlist(code) {
             heartIcon.style.color = '#6c757d';
         }
     } else {
-        // 관심종목 추가 (매입 정보 없이 바로 추가)
+        // 관심종목 추가
         if (window.watchlistManager) {
             window.watchlistManager.addToWatchlist(code);
             heartIcon.classList.remove('far');
             heartIcon.classList.add('fas');
             heartIcon.style.color = '#dc3545';
         }
-    }
-}
-
-async function exportToExcel() {
-    try {
-        const response = await fetch(`/filter?limit=30${currentDividendFilter ? `&dividend=${currentDividendFilter}` : ''}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch stocks');
-        }
-
-        const stocks = await response.json();
-        await window.watchlistManager.exportToExcel(stocks, 30, currentDividendFilter);
-    } catch (error) {
-        console.error('Export error:', error);
-        alert('엑셀 내보내기 중 오류가 발생했습니다.');
-    }
-}
-
-async function applyFilters() {
-    const limit = document.getElementById('limitSelect').value;
-    const dividendFilter = document.getElementById('dividendFilter').value;
-    
-    try {
-        const response = await fetch(`/filter?limit=${limit}${dividendFilter ? `&dividend=${dividendFilter}` : ''}`);
-        if (!response.ok) {
-            throw new Error('데이터를 가져오는 중 오류가 발생했습니다.');
-        }
-        
-        const stocks = await response.json();
-        
-        if (stocks.error) {
-            throw new Error(stocks.error);
-        }
-        
-        if (!stocks || stocks.length === 0) {
-            document.getElementById('stockGrid').innerHTML = '<div class="col-12 text-center text-muted">조건에 맞는 종목이 없습니다.</div>';
-            return;
-        }
-        
-        const stockCards = stocks.map(stock => {
-            const lastUpdate = stock.last_updated ? new Date(stock.last_updated) : new Date();
-            const timeSinceUpdate = getTimeSinceUpdate(lastUpdate);
-            
-            return `
-                <div class="col-12 col-sm-6 col-md-4 mb-4">
-                    <div class="card h-100 stock-card" onclick="toggleDetails('${stock.code}')">
-                        <div class="card-body">
-                            <h5 class="card-title">
-                                ${stock.name}
-                                <small class="text-muted d-block">${stock.code}</small>
-                            </h5>
-                            <p class="card-text mb-2">
-                                안전마진: 
-                                <span class="${stock.safety_margin >= 0 ? 'text-success' : 'text-danger'} fw-bold">
-                                    ${Math.round(stock.safety_margin)}%
-                                </span>
-                            </p>
-                            <div id="details-${stock.code}" class="stock-details">
-                                <div class="detail-item">
-                                    <span class="detail-label">현재가</span>
-                                    <span class="detail-value">${Math.round(stock.current_price).toLocaleString()}원</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">내재가치</span>
-                                    <span class="detail-value">${Math.round(stock.intrinsic_value).toLocaleString()}원</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">자사주비율</span>
-                                    <span class="detail-value">${stock.treasury_ratio ? Math.round(stock.treasury_ratio) + '%' : '-'}</span>
-                                </div>
-                                <div class="detail-item">
-                                    <span class="detail-label">배당수익률</span>
-                                    <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
-                                </div>
-                            </div>
-                            <div class="mt-3 text-end">
-                                <small class="text-muted">마지막 업데이트: ${timeSinceUpdate}</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `;
-        }).join('');
-
-        document.getElementById('stockGrid').innerHTML = stockCards;
-    } catch (error) {
-        console.error('Error:', error);
-        document.getElementById('stockGrid').innerHTML = `<div class="col-12 text-center text-danger">${error.message}</div>`;
     }
 }
 </script>

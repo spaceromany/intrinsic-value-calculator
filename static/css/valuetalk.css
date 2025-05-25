@@ -1,0 +1,225 @@
+/* 게시물 그리드 레이아웃 */
+.posts-grid {
+    display: grid;
+    grid-template-columns: repeat(1, 1fr);
+    gap: 1rem;
+    padding: 1rem;
+}
+
+@media (min-width: 768px) {
+    .posts-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (min-width: 1200px) {
+    .posts-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+/* 게시물 카드 스타일 */
+.post-card {
+    border: none;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background-color: #ffffff;
+    border-radius: 12px;
+}
+
+.post-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    transform: translateY(-2px);
+}
+
+/* 게시물 내용 스타일 */
+.post-content {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin: 1rem 0;
+    white-space: pre-wrap;
+    word-break: break-word;
+    flex-grow: 1;
+    color: #2c3e50;
+}
+
+.post-content.collapsed {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    max-height: 3.2em;
+}
+
+/* 게시물 헤더/푸터 스타일 */
+.post-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+}
+
+.post-author {
+    font-size: 0.95rem;
+}
+
+.post-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.post-time {
+    font-size: 0.85rem;
+}
+
+.post-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #f0f0f0;
+}
+
+/* 게시물 액션 버튼 스타일 */
+.post-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.post-actions i {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 1.1rem;
+}
+
+.post-actions i:hover {
+    color: #0d6efd;
+    transform: scale(1.1);
+}
+
+/* 종목 태그 스타일 */
+.post-stocks {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-left: auto;
+}
+
+.stock-tag {
+    color: #0d6efd;
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.stock-tag:hover {
+    color: #0a58ca;
+    text-decoration: none;
+}
+
+/* 더보기 버튼 스타일 */
+.read-more {
+    color: #0d6efd;
+    cursor: pointer;
+    font-size: 0.9rem;
+    margin-top: 0.5rem;
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    background-color: #f8f9fa;
+    transition: all 0.2s ease;
+}
+
+.read-more:hover {
+    background-color: #e7f1ff;
+    text-decoration: none;
+}
+
+/* 선택된 종목 스타일 */
+.selected-stock {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    margin: 0.25rem;
+    background-color: #e7f1ff;
+    color: #0d6efd;
+    border-radius: 1rem;
+    font-size: 0.875rem;
+    border: 1px solid #0d6efd;
+}
+
+.selected-stock .stock-name {
+    font-weight: 500;
+}
+
+.selected-stock .remove-stock {
+    margin-left: 0.75rem;
+    cursor: pointer;
+    color: #0d6efd;
+    opacity: 0.7;
+}
+
+.selected-stock .remove-stock:hover {
+    opacity: 1;
+}
+
+/* 댓글 아이콘 스타일 */
+.comment-icon-wrapper {
+    display: inline-block;
+    cursor: pointer;
+}
+
+.comment-count {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-left: 2px;
+}
+
+/* 필터 뱃지 스타일 */
+#currentFilter {
+    padding: 0.5rem 1rem;
+    border-radius: 1rem;
+    background-color: #0d6efd;
+    color: white;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#currentFilter .btn-close {
+    padding: 0.25rem;
+    margin-left: 0.5rem;
+    opacity: 0.8;
+}
+
+#currentFilter .btn-close:hover {
+    opacity: 1;
+}
+
+.stock-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+    color: white;
+    padding: 0.4rem 0.8rem;
+    border-radius: 1rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2);
+    transition: all 0.2s ease;
+}
+
+.stock-filter-badge:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 6px rgba(13, 110, 253, 0.3);
+} 
