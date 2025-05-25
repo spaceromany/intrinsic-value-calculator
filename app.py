@@ -462,7 +462,78 @@ def get_posts():
                     if stock_code in post_stocks:
                         filtered_posts.append(post)
             
-            result.data = filtered_posts
+            # 페이지네이션 적용
+            total_count = len(filtered_posts)
+            start_idx = (page - 1) * per_page
+            end_idx = start_idx + per_page
+            result.data = filtered_posts[start_idx:end_idx]
+            
+            # 종목 정보 가져오기
+            stock_codes = {stock_code}  # 현재 필터링된 종목 코드만 포함
+            post_ids = [post['id'] for post in result.data]
+            
+            # 종목 정보 로드
+            stock_info = {}
+            try:
+                with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+                    stocks_data = json.load(f)
+                    for stock in stocks_data:
+                        if stock['code'] == stock_code:
+                            stock_info[stock['code']] = stock['name']
+                            break
+            except Exception as e:
+                print(f"종목 정보 로드 중 오류 발생: {str(e)}")
+            
+            # 모든 게시물의 좋아요 정보를 한 번에 가져오기
+            likes_result = supabase.table('likes').select('*').in_('post_id', post_ids).execute()
+            likes_by_post = {}
+            for like in likes_result.data:
+                if like['post_id'] not in likes_by_post:
+                    likes_by_post[like['post_id']] = []
+                likes_by_post[like['post_id']].append(like)
+            
+            # 사용자의 좋아요 정보를 한 번에 가져오기
+            user_likes_result = supabase.table('likes').select('*').in_('post_id', post_ids).eq('device_id', device_id).execute()
+            user_liked_posts = {like['post_id'] for like in user_likes_result.data}
+            
+            # 모든 게시물의 댓글 정보를 한 번에 가져오기
+            comments_result = supabase.table('comments').select('*').in_('post_id', post_ids).execute()
+            comments_by_post = {}
+            for comment in comments_result.data:
+                if comment['post_id'] not in comments_by_post:
+                    comments_by_post[comment['post_id']] = []
+                comments_by_post[comment['post_id']].append(comment)
+            
+            # 게시물에 종목명, 좋아요, 댓글 정보 추가
+            for post in result.data:
+                if isinstance(post['stocks'], list):
+                    post['stocks'] = [{'code': code if isinstance(code, str) else code['code'], 
+                                     'name': stock_info.get(code if isinstance(code, str) else code['code'], 
+                                                           code if isinstance(code, str) else code['code'])} 
+                                    for code in post['stocks']]
+                
+                # 현재 디바이스의 게시물인지 표시
+                post['is_owner'] = post['device_id'] == device_id
+                
+                # 좋아요 정보 추가
+                post_likes = likes_by_post.get(post['id'], [])
+                post['likes'] = {
+                    'count': len(post_likes),
+                    'is_liked': post['id'] in user_liked_posts
+                }
+                
+                # 댓글 정보 추가
+                post_comments = comments_by_post.get(post['id'], [])
+                post['comments'] = {
+                    'count': len(post_comments),
+                    'items': post_comments
+                }
+            
+            return jsonify({
+                'posts': result.data,
+                'has_more': end_idx < total_count,
+                'total_count': total_count
+            })
         else:
             result = query.execute()
         

@@ -37,7 +37,12 @@
     <!-- 게시물 목록 섹션 -->
     <div id="postsContainer" class="bg-white rounded shadow-sm p-4">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h3 class="mb-0">최근 게시물</h3>
+            <h3 class="mb-0">
+                <span id="postsTitle">최근 게시물</span>
+                <span id="filteredStock" class="ms-2" style="display: none;">
+                    <span class="stock-filter-badge"></span>
+                </span>
+            </h3>
             <div class="btn-group">
                 <button class="btn btn-outline-secondary active" data-filter="all" onclick="filterPosts('all')">전체</button>
                 <button class="btn btn-outline-secondary" data-filter="following" onclick="filterPosts('following')">관심종목</button>
@@ -257,6 +262,44 @@
         color: #6c757d;
         margin-left: 2px;
     }
+    #currentFilter {
+        padding: 0.5rem 1rem;
+        border-radius: 1rem;
+        background-color: #0d6efd;
+        color: white;
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    #currentFilter .btn-close {
+        padding: 0.25rem;
+        margin-left: 0.5rem;
+        opacity: 0.8;
+    }
+    
+    #currentFilter .btn-close:hover {
+        opacity: 1;
+    }
+    
+    .stock-filter-badge {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);
+        color: white;
+        padding: 0.4rem 0.8rem;
+        border-radius: 1rem;
+        font-size: 0.9rem;
+        font-weight: 500;
+        box-shadow: 0 2px 4px rgba(13, 110, 253, 0.2);
+        transition: all 0.2s ease;
+    }
+    
+    .stock-filter-badge:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 6px rgba(13, 110, 253, 0.3);
+    }
 </style>
 
 <script>
@@ -265,6 +308,7 @@ let currentPage = 1;
 let hasMore = false;
 let isLoading = false;
 let currentFilter = 'all';
+let currentStockCode = null;
 
 // 디바운스 함수
 function debounce(func, wait) {
@@ -545,7 +589,13 @@ function appendPosts(posts) {
 }
 
 function loadMore() {
-    if (!isLoading && hasMore) loadPosts(currentFilter, currentPage+1);
+    if (!isLoading && hasMore) {
+        if (currentFilter === 'stock' && currentStockCode) {
+            loadPosts(currentFilter, currentPage + 1, currentStockCode);
+        } else {
+            loadPosts(currentFilter, currentPage + 1);
+        }
+    }
 }
 
 // 좋아요 정보 로드 (500 시 기본값)
@@ -640,7 +690,7 @@ function createPostElement(post) {
                 </div>
                 <div class="post-stocks">
                     ${post.stocks.map(s=>`
-                        <a href="#" class="stock-tag" onclick="event.stopPropagation(); filterByStock('${s.code}')">
+                        <a href="#" class="stock-tag" onclick="event.stopPropagation(); filterByStock('${s.code}', '${s.name}')">
                             #${s.name}
                         </a>
                     `).join('')}
@@ -700,14 +750,42 @@ async function filterPosts(filter) {
     document.querySelectorAll('.btn-group .btn').forEach(btn=>{
         btn.classList.toggle('active', btn.getAttribute('data-filter')===filter);
     });
-    currentPage=1;
-    await loadPosts(filter,1);
+    
+    // 제목 초기화
+    const titleEl = document.getElementById('postsTitle');
+    const filterEl = document.getElementById('filteredStock');
+    if (titleEl) titleEl.textContent = '최근 게시물';
+    if (filterEl) filterEl.style.display = 'none';
+    
+    currentPage = 1;
+    currentFilter = filter;
+    currentStockCode = null;  // 종목 코드 초기화
+    await loadPosts(filter, 1);
 }
 
 // 종목별 필터
-async function filterByStock(code) {
-    currentPage=1;
-    await loadPosts('stock',1,code);
+async function filterByStock(code, stockName) {
+    currentPage = 1;
+    currentFilter = 'stock';
+    currentStockCode = code;  // 현재 필터링된 종목 코드 저장
+    
+    // 필터 버튼 상태 업데이트
+    document.querySelectorAll('.btn-group .btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    
+    // 제목에 종목명 표시
+    const titleEl = document.getElementById('postsTitle');
+    const filterEl = document.getElementById('filteredStock');
+    const badgeEl = filterEl.querySelector('.stock-filter-badge');
+    
+    if (titleEl && filterEl && badgeEl) {
+        titleEl.textContent = '최근 게시물';
+        badgeEl.textContent = `#${stockName}`;
+        filterEl.style.display = 'inline-block';
+    }
+    
+    await loadPosts('stock', 1, code);
 }
 
 // 댓글 수 업데이트
