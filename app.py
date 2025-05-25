@@ -26,6 +26,9 @@ supabase: Client = create_client(
     os.getenv('SUPABASE_KEY')
 )
 
+supabase.postgrest.headers.update({
+    "Prefer": "return=minimal"
+})
 # StockChatbot 인스턴스 생성
 # stock_chatbot = StockChatbot(supabase)
 
@@ -345,63 +348,53 @@ def get_anonymous_id():
         print(f"익명 ID 발급 중 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+from postgrest.exceptions import APIError
+
 @app.route('/valuetalk/post', methods=['POST'])
 def create_post():
     try:
+        # ───────── 0) 입력/검증 ─────────
         data = request.get_json()
-        content = data.get('content')
-        stocks = data.get('stocks', [])
+        content      = data.get('content')
+        stocks       = data.get('stocks', [])
         anonymous_id = data.get('anonymous_id')
-        
+        device_id    = get_device_id()
+
         if not content or not stocks:
             return jsonify({'error': '내용과 종목 정보가 필요합니다.'}), 400
-        
         if not anonymous_id:
             return jsonify({'error': '익명 ID가 필요합니다.'}), 400
-        
-        # 디바이스 ID 가져오기
-        device_id = get_device_id()
         if not device_id:
             return jsonify({'error': '디바이스 ID가 필요합니다.'}), 400
-        
-        # 현재 시간을 한국 시간대로 저장
+
         current_time = datetime.now().astimezone().isoformat()
-        
-        # 게시물 생성
-        post_data = {
-            'content': content,
+
+        # stocks를 JSONB 형식으로 변환
+        stocks_json = [{'code': code} for code in stocks]
+
+        post_row = {
+            'content':      content,
             'anonymous_id': anonymous_id,
-            'device_id': device_id,
-            'created_at': current_time,
-            'stocks': stocks
+            'device_id':    device_id,
+            'created_at':   current_time,
+            'stocks':       stocks_json  # JSONB 형식으로 저장
         }
-        
-        result = supabase.table('posts').insert(post_data).execute()
-        if not result.data:
+
+        # ───────── 1) INSERT ─────────
+        try:
+            insert_resp = supabase.table('posts').insert(post_row).execute()
+            if not insert_resp.data:
+                raise Exception('게시물 저장에 실패했습니다.')
+            
+            post_id = insert_resp.data[0]['id']
+            return jsonify({'message': '게시물이 작성되었습니다.', 'post_id': post_id}), 201
+
+        except Exception as err:
+            app.logger.error(f"posts INSERT error: {err}")
             return jsonify({'error': '게시물 저장에 실패했습니다.'}), 500
-            
-        post_id = result.data[0]['id']
-        
-        # 종목 연결
-        for stock_code in stocks:
-            stock_result = supabase.table('post_stocks').insert({
-                'post_id': post_id,
-                'stock_code': stock_code
-            }).execute()
-            
-            if not stock_result.data:
-                # 게시물은 생성되었지만 종목 연결에 실패한 경우 게시물 삭제
-                supabase.table('posts').delete().eq('id', post_id).execute()
-                return jsonify({'error': '종목 연결에 실패했습니다.'}), 500
-        
-        # 성공 응답
-        return jsonify({
-            'message': '게시물이 작성되었습니다.',
-            'post_id': post_id
-        }), 201
-        
+
     except Exception as e:
-        print(f"게시물 작성 중 오류: {str(e)}")
+        app.logger.exception("게시물 작성 중 예외")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/valuetalk/posts')
@@ -566,7 +559,7 @@ def get_comments(post_id):
     try:
         # 댓글 조회
         result = supabase.table('comments').select('*').eq('post_id', post_id).order('created_at', desc=True).execute()
-        
+        print(result.data)
         if not result.data:
             return jsonify([])
         
