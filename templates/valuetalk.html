@@ -173,13 +173,45 @@ window.addEventListener('scroll', () => {
     }, 200);
 });
 
+// UUID 생성 함수
+function generateUUID() {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0;
+        const v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+    });
+}
+
+// device_id 관리
+function getDeviceId() {
+    let deviceId = localStorage.getItem('device_id');
+    if (!deviceId) {
+        deviceId = generateUUID();
+        localStorage.setItem('device_id', deviceId);
+    }
+    return deviceId;
+}
+
+// 모든 fetch 요청에 device_id 포함
+function fetchWithDeviceId(url, options = {}) {
+    const deviceId = getDeviceId();
+    return fetch(url, {
+        ...options,
+        headers: {
+            ...options.headers,
+            'X-Device-ID': deviceId
+        },
+        credentials: 'include'
+    });
+}
+
 // 익명 ID 새로고침
 async function refreshAnonymousId() {
     try {
-        const response = await fetch('/valuetalk/anonymous-id', { method: 'POST' });
+        const response = await fetchWithDeviceId('/valuetalk/anonymous-id', { method: 'POST' });
         if (!response.ok) throw new Error();
         const data = await response.json();
-        localStorage.setItem('anonymousId', data.anonymous_id);
+        localStorage.setItem('anonymous_id', data.anonymous_id);
         document.getElementById('currentAnonymousId').textContent = data.anonymous_id;
     } catch {
         alert('익명 ID를 가져오는데 실패했습니다.');
@@ -188,14 +220,14 @@ async function refreshAnonymousId() {
 
 // 익명 ID 표시
 async function displayAnonymousId() {
-    let anonymousId = localStorage.getItem('anonymousId');
+    let anonymousId = localStorage.getItem('anonymous_id');
     if (!anonymousId) {
         try {
-            const res = await fetch('/valuetalk/anonymous-id', { method: 'POST' });
+            const res = await fetchWithDeviceId('/valuetalk/anonymous-id', { method: 'POST' });
             if (res.ok) {
                 const data = await res.json();
                 anonymousId = data.anonymous_id;
-                localStorage.setItem('anonymousId', anonymousId);
+                localStorage.setItem('anonymous_id', anonymousId);
             }
         } catch {}
     }
@@ -281,8 +313,8 @@ async function submitPost() {
     if (!content) return alert('내용을 입력해주세요.');
     if (content.length > 280) return alert('280자 초과!');
     try {
-        const anonymousId = localStorage.getItem('anonymousId');
-        const res = await fetch('/valuetalk/post', {
+        const anonymousId = localStorage.getItem('anonymous_id') || await getAnonymousId();
+        const res = await fetchWithDeviceId('/valuetalk/post', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
             body: JSON.stringify({ content, stocks:[selectedStock.code], anonymous_id: anonymousId })
@@ -324,7 +356,7 @@ async function loadPosts(filter='all', page=1, code=null) {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        const res = await fetch(url, { signal: controller.signal });
+        const res = await fetchWithDeviceId(url, { signal: controller.signal });
         clearTimeout(timeoutId);
         
         if (!res.ok) throw new Error('Failed to load posts');
@@ -690,7 +722,7 @@ async function submitComment(postId) {
     const content = input.value.trim();
     if (!content) return alert('댓글 내용을 입력해주세요.');
     try {
-        const anonymousId = localStorage.getItem('anonymousId');
+        const anonymousId = localStorage.getItem('anonymous_id') || await getAnonymousId();
         const res = await fetch(`/valuetalk/post/${postId}/comment`, {
             method:'POST',
             headers:{'Content-Type':'application/json'},
@@ -735,7 +767,7 @@ async function deleteComment(id) {
 // 좋아요 토글
 async function likePost(postId) {
     try {
-        const res = await fetch(`/valuetalk/post/${postId}/like`, { method: 'POST' });
+        const res = await fetchWithDeviceId(`/valuetalk/post/${postId}/like`, { method: 'POST' });
         if (!res.ok) throw new Error('Failed to toggle like');
         
         const data = await res.json();

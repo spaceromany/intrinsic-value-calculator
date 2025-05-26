@@ -34,9 +34,9 @@ supabase.postgrest.headers.update({
 
 def get_device_id():
     """디바이스 ID 생성 또는 가져오기"""
-    device_id = request.cookies.get('device_id')
+    device_id = request.headers.get('X-Device-ID')
     if not device_id:
-        device_id = str(uuid.uuid4())
+        return None
     return device_id
 
 # 격언 데이터 로드
