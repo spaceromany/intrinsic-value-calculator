@@ -741,18 +741,21 @@ async function submitComment(postId) {
 function showPostOptions(id) {
     if (confirm('이 게시물을 삭제하시겠습니까?')) deletePost(id);
 }
+
 async function deletePost(id) {
     try {
-        const res = await fetch(`/valuetalk/post/${id}`, { method:'DELETE' });
+        const res = await fetchWithDeviceId(`/valuetalk/post/${id}`, { method:'DELETE' });
         if (!res.ok) throw '';
         loadPosts();
     } catch {
         alert('삭제 실패');
     }
 }
+
 function showCommentOptions(id) {
     if (confirm('이 댓글을 삭제하시겠습니까?')) deleteComment(id);
 }
+
 async function deleteComment(id) {
     try {
         const res = await fetchWithDeviceId(`/valuetalk/comment/${id}`, { method:'DELETE' });
