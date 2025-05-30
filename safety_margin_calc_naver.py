@@ -451,7 +451,7 @@ def analyze_all_stocks(limit: int = 30) -> list:
         try:
             result = analyze_stock(code)
             print(f"종목 {code} ({name}) 분석 완료")
-            time.sleep(0.2)
+            time.sleep(10)
             if not result.get('error') :
                 stock_data = {
                     'code': code,

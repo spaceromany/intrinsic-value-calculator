@@ -770,29 +770,22 @@ def get_post_likes(post_id):
         print(f"좋아요 정보 조회 중 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/update-data', methods=['POST'])
-def update_data():
-    """데이터 업데이트 API"""
+def background_update():
+    """백그라운드에서 데이터를 업데이트하는 함수"""
     try:
-
-        print(f"[{datetime.now()}] 데이터 업데이트 시작...")
-        load_krx_stocks()
-        print(f"KRX 데이터 업데이트 완료...")
-        analyze_all_stocks()
-        print(f"[{datetime.now()}] 데이터 업데이트 완료")
-        
-        return jsonify({
-            'status': 'success',
-            'message': '데이터 업데이트가 완료되었습니다.',
-            'timestamp': datetime.now().isoformat()
-        })
+        while True:
+            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 시작...")
+            load_krx_stocks()
+            print(f"KRX 데이터 업데이트 완료...")
+            analyze_all_stocks()
+            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 완료")
+            time.sleep(60)  # 1분
     except Exception as e:
-        print(f"[{datetime.now()}] 데이터 업데이트 중 오류 발생: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': str(e),
-            'timestamp': datetime.now().isoformat()
-        }), 500
+        print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 중 오류 발생: {str(e)}")
+
 
 if __name__ == '__main__':
+    update_thread = threading.Thread(target=background_update)
+    update_thread.daemon = True  # 메인 프로그램이 종료되면 스레드도 함께 종료
+    update_thread.start()
     app.run(host='0.0.0.0', port=7777, debug=False) 
