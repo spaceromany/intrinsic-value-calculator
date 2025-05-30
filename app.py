@@ -18,8 +18,23 @@ from anonymous_ids import generate_anonymous_id
 # Load environment variables
 load_dotenv()
 
-app = Flask(__name__)
+def background_update():
+    """백그라운드에서 데이터를 업데이트하는 함수"""
+    try:
+        while True:
+            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 시작...")
+            load_krx_stocks()
+            print(f"KRX 데이터 업데이트 완료...")
+            analyze_all_stocks()
+            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 완료")
+            time.sleep(60)  # 1분
+    except Exception as e:
+        print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 중 오류 발생: {str(e)}")
 
+app = Flask(__name__)
+update_thread = threading.Thread(target=background_update)
+update_thread.daemon = True  # 메인 프로그램이 종료되면 스레드도 함께 종료
+update_thread.start()
 # Supabase 설정
 supabase: Client = create_client(
     os.getenv('SUPABASE_URL'),
@@ -104,20 +119,20 @@ def search():
 @app.route('/filter')
 def filter_stocks():
     try:
-        print("필터링 시작...")
+        # print("필터링 시작...")
         # JSON 파일에서 데이터 읽기
         with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
             stocks = json.load(f)
-        print(f"총 {len(stocks)}개의 종목 데이터를 읽었습니다.")
+        # print(f"총 {len(stocks)}개의 종목 데이터를 읽었습니다.")
         
         # 안전마진 기준으로 정렬 (None이나 NaN은 맨 뒤로)
         stocks.sort(key=lambda x: float('-inf') if x.get('safety_margin') is None or math.isnan(x.get('safety_margin', float('-inf'))) else x.get('safety_margin', float('-inf')), reverse=True)
-        print("안전마진 기준으로 정렬 완료")
+        # print("안전마진 기준으로 정렬 완료")
         
         # 배당수익률 필터링
         dividend_filter = request.args.get('dividend', type=float)
         if dividend_filter is not None:
-            print(f"배당수익률 {dividend_filter}% 이상 필터링 시작")
+            # print(f"배당수익률 {dividend_filter}% 이상 필터링 시작")
             filtered_stocks = []
             for stock in stocks:
                 try:
@@ -127,11 +142,11 @@ def filter_stocks():
                 except (TypeError, ValueError):
                     continue
             stocks = filtered_stocks
-            print(f"배당수익률 필터링 후 {len(stocks)}개 종목 남음")
+            #print(f"배당수익률 필터링 후 {len(stocks)}개 종목 남음")
         
         # 상위 N개 종목 반환
         limit = request.args.get('limit', default=30, type=int)
-        print(f"상위 {limit}개 종목 선택")
+        # print(f"상위 {limit}개 종목 선택")
         # 실제 결과 개수와 요청된 limit 중 작은 값 사용
         actual_limit = min(limit, len(stocks))
         
@@ -145,7 +160,7 @@ def filter_stocks():
             'stocks': stocks[:actual_limit],
             'actual_limit': len(stocks[:actual_limit])
         }
-        print(f"최종 결과: {len(result['stocks'])}개 종목 반환")
+        # print(f"최종 결과: {len(result['stocks'])}개 종목 반환")
         return jsonify(result)
     except Exception as e:
         print(f"필터링 중 오류 발생: {str(e)}")
@@ -770,22 +785,8 @@ def get_post_likes(post_id):
         print(f"좋아요 정보 조회 중 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-def background_update():
-    """백그라운드에서 데이터를 업데이트하는 함수"""
-    try:
-        while True:
-            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 시작...")
-            load_krx_stocks()
-            print(f"KRX 데이터 업데이트 완료...")
-            analyze_all_stocks()
-            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 완료")
-            time.sleep(60)  # 1분
-    except Exception as e:
-        print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 중 오류 발생: {str(e)}")
 
 
 if __name__ == '__main__':
-    update_thread = threading.Thread(target=background_update)
-    update_thread.daemon = True  # 메인 프로그램이 종료되면 스레드도 함께 종료
-    update_thread.start()
+
     app.run(host='0.0.0.0', port=7777, debug=False) 
