@@ -415,44 +415,46 @@ def analyze_all_stocks(limit: int = 30) -> list:
     """
 
     if KRX_STOCKS is None:
+        print("❗ KRX_STOCKS is None. 데이터 없음", flush=True)
         return []
     
     total_stocks = len(KRX_STOCKS)
-    print(f"\n전체 {total_stocks}개 종목 분석 시작...")
-    
-    # 기존 결과 파일이 있으면 로드
+    print(f"\n📊 전체 {total_stocks}개 종목 분석 시작...", flush=True)
+
+    # 기존 결과 로드
     existing_results = []
     if os.path.exists('all_safety_margin_results.json'):
         try:
             with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
                 existing_results = json.load(f)
         except Exception as e:
-            print(f"기존 결과 파일 로드 중 오류 발생: {e}")
-    
-    # 분석할 종목 목록 준비
+            print(f"❗ 기존 결과 파일 로드 중 오류 발생: {e}", flush=True)
+
+    # dict로 변환하여 빠른 조회 가능하게
+    results_dict = {item['code']: item for item in existing_results}
+    results = existing_results.copy()
+
     stock_list = [(row['Code'], row['Name']) for _, row in KRX_STOCKS.iterrows()]
-    
-    # 순차 처리로 종목 분석
-    results = existing_results.copy()  # 기존 결과 복사
     current_time = datetime.now()
     skipped_count = 0
-    
+
     for i, (code, name) in enumerate(stock_list):
-        # 기존 결과에서 해당 종목 찾기
-        existing_stock = next((item for item in results if item['code'] == code), None)
-        
-        # 4시간이 지나지 않은 종목은 건너뛰기
+        print(f"🔍 [{i+1}/{total_stocks}] {code} - {name} 처리 시작", flush=True)
+
+        existing_stock = results_dict.get(code)
+
         if existing_stock and 'last_updated' in existing_stock:
             last_updated = datetime.fromisoformat(existing_stock['last_updated'])
-            if (current_time - last_updated).total_seconds() < 3600 * 4:  # 4시간
+            if (current_time - last_updated).total_seconds() < 3600 * 4:
                 skipped_count += 1
                 continue
-        
+
         try:
             result = analyze_stock(code)
-            print(f"종목 {code} ({name}) 분석 완료")
+            print(f"✅ 종목 {code} ({name}) 분석 완료", flush=True)
             time.sleep(10)
-            if not result.get('error') :
+
+            if not result.get('error'):
                 stock_data = {
                     'code': code,
                     'name': result['stock_name'],
@@ -461,9 +463,11 @@ def analyze_all_stocks(limit: int = 30) -> list:
                     'safety_margin': result['safety_margin'],
                     'treasury_ratio': result['treasury_ratio'],
                     'dividend_yield': result['dividend_yield'],
-                    'last_updated': current_time.isoformat()  # 업데이트 시간 저장
-                } 
-                # 기존 결과에서 해당 종목 찾아 업데이트
+                    'last_updated': current_time.isoformat()
+                }
+
+                # dict와 list 동시 업데이트
+                results_dict[code] = stock_data
                 if existing_stock:
                     for j, item in enumerate(results):
                         if item['code'] == code:
@@ -471,31 +475,32 @@ def analyze_all_stocks(limit: int = 30) -> list:
                             break
                 else:
                     results.append(stock_data)
-                # 매 10개 종목마다 파일 저장
+
+                # 10개마다 저장
                 if (i + 1) % 10 == 0:
-                    # 안전마진 기준으로 정렬
                     results.sort(key=margin_key, reverse=True)
                     with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
                         json.dump(results, f, ensure_ascii=False, indent=2)
-                    print(f"\n{i + 1}/{total_stocks} 종목 분석 완료")
+                    print(f"💾 {i + 1}개 종목 분석 결과 저장", flush=True)
+
         except Exception as e:
-            print(f"\n종목 {code} ({name}) 분석 중 오류 발생: {e}")
-            # 오류 발생 시에도 현재까지의 결과 저장
+            print(f"❗ 종목 {code} ({name}) 분석 중 오류 발생: {e}", flush=True)
             results.sort(key=margin_key, reverse=True)
             with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
             continue
-    
-    # 최종 결과 저장
+
+    # 최종 저장
     results.sort(key=margin_key, reverse=True)
     with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
-    
-    print(f"\n분석 완료: {len(results)}개 종목 분석 성공")
-    print(f"건너뛴 종목 수: {skipped_count}")
-    print(f"상위 {limit}개 종목 반환")
-    
+
+    print(f"\n✅ 분석 완료: {len(results)}개 종목 분석 성공", flush=True)
+    print(f"⏩ 건너뛴 종목 수: {skipped_count}", flush=True)
+    print(f"📈 상위 {limit}개 종목 반환", flush=True)
+
     return results[:limit]
+
 
 
 if __name__ == "__main__":

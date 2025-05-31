@@ -1580,16 +1580,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "005990",
-    "name": "매일홀딩스",
-    "current_price": 10560.0,
-    "intrinsic_value": 30029.986672589963,
-    "safety_margin": 184.37487379346555,
-    "treasury_ratio": 9.96,
-    "dividend_yield": 2.37,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "001500",
     "name": "현대차증권",
     "current_price": 7150.0,
@@ -1738,6 +1728,16 @@
     "treasury_ratio": 0,
     "dividend_yield": 4.69,
     "last_updated": "2025-05-29T09:39:42.121797"
+  },
+  {
+    "code": "005990",
+    "name": "매일홀딩스",
+    "current_price": 10890.0,
+    "intrinsic_value": 30029.986672589963,
+    "safety_margin": 175.75745337548173,
+    "treasury_ratio": 9.96,
+    "dividend_yield": 2.3,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "017000",
@@ -2340,6 +2340,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "317400",
+    "name": "자이에스앤디",
+    "current_price": 3605.0,
+    "intrinsic_value": 8878.76937688681,
+    "safety_margin": 146.29041267369794,
+    "treasury_ratio": 1.73,
+    "dividend_yield": 4.16,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "002240",
     "name": "고려제강",
     "current_price": 17510.0,
@@ -2437,16 +2447,6 @@
     "safety_margin": 142.37725159057547,
     "treasury_ratio": 0.55,
     "dividend_yield": 1.05,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
-    "code": "317400",
-    "name": "자이에스앤디",
-    "current_price": 3670.0,
-    "intrinsic_value": 8878.76937688681,
-    "safety_margin": 141.92832089609837,
-    "treasury_ratio": 1.73,
-    "dividend_yield": 4.09,
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
@@ -3100,6 +3100,16 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
+    "code": "007210",
+    "name": "벽산",
+    "current_price": 2200.0,
+    "intrinsic_value": 4806.321907719256,
+    "safety_margin": 118.46917762360256,
+    "treasury_ratio": 16.27,
+    "dividend_yield": 1.68,
+    "last_updated": "2025-05-31T09:01:12.354409"
+  },
+  {
     "code": "000140",
     "name": "하이트진로홀딩스",
     "current_price": 9310.0,
@@ -3128,16 +3138,6 @@
     "treasury_ratio": 2.2,
     "dividend_yield": 4.09,
     "last_updated": "2025-05-31T07:22:23.101184"
-  },
-  {
-    "code": "007210",
-    "name": "벽산",
-    "current_price": 2210.0,
-    "intrinsic_value": 4806.321907719256,
-    "safety_margin": 117.48062930856362,
-    "treasury_ratio": 16.27,
-    "dividend_yield": 1.67,
-    "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
     "code": "161390",
@@ -3440,16 +3440,6 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
-    "code": "024090",
-    "name": "디씨엠",
-    "current_price": 12660.0,
-    "intrinsic_value": 26706.74770965468,
-    "safety_margin": 110.95377337799906,
-    "treasury_ratio": 24.32,
-    "dividend_yield": 6.32,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "052900",
     "name": "KX하이텍",
     "current_price": 948.0,
@@ -3548,6 +3538,16 @@
     "treasury_ratio": 0.47,
     "dividend_yield": 2.88,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "024090",
+    "name": "디씨엠",
+    "current_price": 12850.0,
+    "intrinsic_value": 26706.74770965468,
+    "safety_margin": 107.83461252649556,
+    "treasury_ratio": 24.32,
+    "dividend_yield": 6.23,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "005800",
@@ -3880,16 +3880,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "012700",
-    "name": "리드코프",
-    "current_price": 5570.0,
-    "intrinsic_value": 11033.27133705311,
-    "safety_margin": 98.08386601531615,
-    "treasury_ratio": 3.22,
-    "dividend_yield": 1.79,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "241790",
     "name": "티이엠씨씨엔에스",
     "current_price": 5960.0,
@@ -4118,6 +4108,16 @@
     "treasury_ratio": 3.21,
     "dividend_yield": 3.21,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "012700",
+    "name": "리드코프",
+    "current_price": 5760.0,
+    "intrinsic_value": 11033.27133705311,
+    "safety_margin": 91.54984960161647,
+    "treasury_ratio": 3.22,
+    "dividend_yield": 1.74,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "093920",
@@ -5260,6 +5260,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "015890",
+    "name": "태경산업",
+    "current_price": 5120.0,
+    "intrinsic_value": 8690.0,
+    "safety_margin": 69.7265625,
+    "treasury_ratio": 0,
+    "dividend_yield": 4.88,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "031330",
     "name": "에스에이엠티",
     "current_price": 2780.0,
@@ -5268,16 +5278,6 @@
     "treasury_ratio": 2.45,
     "dividend_yield": 7.19,
     "last_updated": "2025-05-31T07:22:23.101184"
-  },
-  {
-    "code": "015890",
-    "name": "태경산업",
-    "current_price": 5130.0,
-    "intrinsic_value": 8690.0,
-    "safety_margin": 69.39571150097466,
-    "treasury_ratio": 0,
-    "dividend_yield": 4.87,
-    "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
     "code": "003550",
@@ -6760,16 +6760,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "136540",
-    "name": "윈스테크넷",
-    "current_price": 12000.0,
-    "intrinsic_value": 17339.68934521795,
-    "safety_margin": 44.497411210149586,
-    "treasury_ratio": 11.37,
-    "dividend_yield": 6.67,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "033560",
     "name": "블루콤",
     "current_price": 3400.0,
@@ -6778,6 +6768,16 @@
     "treasury_ratio": 3.25,
     "dividend_yield": null,
     "last_updated": "2025-05-29T09:39:42.121797"
+  },
+  {
+    "code": "136540",
+    "name": "윈스테크넷",
+    "current_price": 12020.0,
+    "intrinsic_value": 17341.645979086734,
+    "safety_margin": 44.27326105729396,
+    "treasury_ratio": 11.38,
+    "dividend_yield": 6.66,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "006400",
@@ -7420,16 +7420,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "006840",
-    "name": "AK홀딩스",
-    "current_price": 11370.0,
-    "intrinsic_value": 15206.831183778477,
-    "safety_margin": 33.74521709567701,
-    "treasury_ratio": 1.53,
-    "dividend_yield": 3.52,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "039420",
     "name": "케이엘넷",
     "current_price": 2680.0,
@@ -7738,6 +7728,16 @@
     "treasury_ratio": 4.23,
     "dividend_yield": 0.99,
     "last_updated": "2025-05-29T09:39:42.121797"
+  },
+  {
+    "code": "006840",
+    "name": "AK홀딩스",
+    "current_price": 11930.0,
+    "intrinsic_value": 15206.831183778477,
+    "safety_margin": 27.467151582384545,
+    "treasury_ratio": 1.53,
+    "dividend_yield": 3.35,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "105740",
@@ -8860,6 +8860,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "282880",
+    "name": "코윈테크",
+    "current_price": 12260.0,
+    "intrinsic_value": 13679.719899381333,
+    "safety_margin": 11.580097058575307,
+    "treasury_ratio": 1.94,
+    "dividend_yield": 1.59,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "039240",
     "name": "경남스틸",
     "current_price": 3225.0,
@@ -8928,16 +8938,6 @@
     "treasury_ratio": 0,
     "dividend_yield": 3.48,
     "last_updated": "2025-05-31T07:22:23.101184"
-  },
-  {
-    "code": "282880",
-    "name": "코윈테크",
-    "current_price": 12360.0,
-    "intrinsic_value": 13679.719899381333,
-    "safety_margin": 10.677345464250264,
-    "treasury_ratio": 1.94,
-    "dividend_yield": 1.57,
-    "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
     "code": "267270",
@@ -9500,16 +9500,6 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
-    "code": "051160",
-    "name": "지어소프트",
-    "current_price": 9560.0,
-    "intrinsic_value": 10001.328777524679,
-    "safety_margin": 4.616409806743505,
-    "treasury_ratio": 12.2,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "064820",
     "name": "케이프",
     "current_price": 6180.0,
@@ -9518,6 +9508,16 @@
     "treasury_ratio": 0.32,
     "dividend_yield": 4.85,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "051160",
+    "name": "지어소프트",
+    "current_price": 9610.0,
+    "intrinsic_value": 10031.033432335696,
+    "safety_margin": 4.381201168945853,
+    "treasury_ratio": 12.46,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:01:12.354409"
   },
   {
     "code": "079810",
@@ -10670,6 +10670,16 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
+    "code": "041440",
+    "name": "현대에버다임",
+    "current_price": 8210.0,
+    "intrinsic_value": 7316.832345951736,
+    "safety_margin": -10.87902136477788,
+    "treasury_ratio": 0.41,
+    "dividend_yield": 0.85,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "246690",
     "name": "TS인베스트먼트",
     "current_price": 1633.0,
@@ -10748,16 +10758,6 @@
     "treasury_ratio": 2.51,
     "dividend_yield": 2.76,
     "last_updated": "2025-05-31T07:22:23.101184"
-  },
-  {
-    "code": "041440",
-    "name": "현대에버다임",
-    "current_price": 8260.0,
-    "intrinsic_value": 7316.832345951736,
-    "safety_margin": -11.418494601068572,
-    "treasury_ratio": 0.41,
-    "dividend_yield": 0.85,
-    "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
     "code": "027050",
@@ -11070,6 +11070,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "092870",
+    "name": "엑시콘",
+    "current_price": 10620.0,
+    "intrinsic_value": 9018.615170494086,
+    "safety_margin": -15.078953196854183,
+    "treasury_ratio": 4.2,
+    "dividend_yield": 0.94,
+    "last_updated": "2025-05-31T09:01:12.354409"
+  },
+  {
     "code": "133750",
     "name": "메가엠디",
     "current_price": 2175.0,
@@ -11188,6 +11198,16 @@
     "treasury_ratio": 13.2,
     "dividend_yield": null,
     "last_updated": "2025-05-29T09:39:42.121797"
+  },
+  {
+    "code": "158430",
+    "name": "아톤",
+    "current_price": 5720.0,
+    "intrinsic_value": 4798.896317520959,
+    "safety_margin": -16.103211232151065,
+    "treasury_ratio": 5.77,
+    "dividend_yield": 0.87,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "362990",
@@ -11350,16 +11370,6 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
-    "code": "158430",
-    "name": "아톤",
-    "current_price": 5830.0,
-    "intrinsic_value": 4798.896317520959,
-    "safety_margin": -17.686169510789725,
-    "treasury_ratio": 5.77,
-    "dividend_yield": 0.86,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "015590",
     "name": "DKME",
     "current_price": 515.0,
@@ -11497,16 +11507,6 @@
     "safety_margin": -19.43170964660937,
     "treasury_ratio": 0,
     "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
-    "code": "092870",
-    "name": "엑시콘",
-    "current_price": 11230.0,
-    "intrinsic_value": 9018.615170494086,
-    "safety_margin": -19.691761616259253,
-    "treasury_ratio": 4.2,
-    "dividend_yield": 0.89,
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
@@ -12070,6 +12070,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "025820",
+    "name": "이구산업",
+    "current_price": 4250.0,
+    "intrinsic_value": 3158.333333333333,
+    "safety_margin": -25.68627450980393,
+    "treasury_ratio": 0,
+    "dividend_yield": 1.18,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "200130",
     "name": "콜마비앤에이치",
     "current_price": 15020.0,
@@ -12200,6 +12210,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "205100",
+    "name": "엑셈",
+    "current_price": 1996.0,
+    "intrinsic_value": 1464.0,
+    "safety_margin": -26.65330661322645,
+    "treasury_ratio": 0,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "109670",
     "name": "씨싸이트",
     "current_price": 6730.0,
@@ -12250,16 +12270,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "025820",
-    "name": "이구산업",
-    "current_price": 4335.0,
-    "intrinsic_value": 3158.333333333333,
-    "safety_margin": -27.143406382160713,
-    "treasury_ratio": 0,
-    "dividend_yield": 1.15,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "045660",
     "name": "에이텍",
     "current_price": 20050.0,
@@ -12276,16 +12286,6 @@
     "intrinsic_value": 1216.5227695953952,
     "safety_margin": -27.154325173928434,
     "treasury_ratio": 1.55,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
-    "code": "205100",
-    "name": "엑셈",
-    "current_price": 2010.0,
-    "intrinsic_value": 1464.0,
-    "safety_margin": -27.164179104477608,
-    "treasury_ratio": 0,
     "dividend_yield": null,
     "last_updated": "2025-05-29T09:39:42.121797"
   },
@@ -12860,16 +12860,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "078140",
-    "name": "대봉엘에스",
-    "current_price": 13480.0,
-    "intrinsic_value": 9062.447257383968,
-    "safety_margin": -32.77116277905068,
-    "treasury_ratio": 1.25,
-    "dividend_yield": 0.37,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "000080",
     "name": "하이트진로",
     "current_price": 20200.0,
@@ -13110,6 +13100,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "078140",
+    "name": "대봉엘에스",
+    "current_price": 14060.0,
+    "intrinsic_value": 9062.447257383968,
+    "safety_margin": -35.544471853599084,
+    "treasury_ratio": 1.25,
+    "dividend_yield": 0.36,
+    "last_updated": "2025-05-31T09:01:12.354409"
+  },
+  {
     "code": "273060",
     "name": "와이즈버즈",
     "current_price": 1002.0,
@@ -13330,16 +13330,6 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
-    "code": "049720",
-    "name": "고려신용정보",
-    "current_price": 10240.0,
-    "intrinsic_value": 6365.859497913675,
-    "safety_margin": -37.833403340686765,
-    "treasury_ratio": 2.54,
-    "dividend_yield": 4.39,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "050120",
     "name": "ES큐브",
     "current_price": 2475.0,
@@ -13468,6 +13458,16 @@
     "treasury_ratio": 0.2,
     "dividend_yield": 1.24,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "049720",
+    "name": "고려신용정보",
+    "current_price": 10360.0,
+    "intrinsic_value": 6365.859497913675,
+    "safety_margin": -38.553479749868,
+    "treasury_ratio": 2.54,
+    "dividend_yield": 4.34,
+    "last_updated": "2025-05-31T09:01:12.354409"
   },
   {
     "code": "000440",
@@ -13648,6 +13648,16 @@
     "treasury_ratio": 0,
     "dividend_yield": 0.71,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "002630",
+    "name": "오리엔트바이오",
+    "current_price": 1179.0,
+    "intrinsic_value": 696.5696569656967,
+    "safety_margin": -40.918604158973984,
+    "treasury_ratio": 0.01,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "039020",
@@ -14250,6 +14260,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "303810",
+    "name": "동국생명과학",
+    "current_price": 9130.0,
+    "intrinsic_value": 4930.666666666667,
+    "safety_margin": -45.99488864549105,
+    "treasury_ratio": 0,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:01:12.354409"
+  },
+  {
     "code": "119610",
     "name": "인터로조",
     "current_price": 17210.0,
@@ -14260,32 +14280,12 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "303810",
-    "name": "동국생명과학",
-    "current_price": 9160.0,
-    "intrinsic_value": 4930.666666666667,
-    "safety_margin": -46.171761280931584,
-    "treasury_ratio": 0,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "442310",
     "name": "대신밸런스제14호스팩",
     "current_price": 2135.0,
     "intrinsic_value": 1149.1666666666667,
     "safety_margin": -46.174863387978135,
     "treasury_ratio": 0,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
-    "code": "002630",
-    "name": "오리엔트바이오",
-    "current_price": 1295.0,
-    "intrinsic_value": 696.5696569656967,
-    "safety_margin": -46.2108372999462,
-    "treasury_ratio": 0.01,
     "dividend_yield": null,
     "last_updated": "2025-05-29T09:39:42.121797"
   },
@@ -14740,6 +14740,16 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
+    "code": "214330",
+    "name": "금호에이치티",
+    "current_price": 655.0,
+    "intrinsic_value": 325.3162301799395,
+    "safety_margin": -50.33339997252831,
+    "treasury_ratio": 6.45,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "101730",
     "name": "위메이드맥스",
     "current_price": 6710.0,
@@ -15008,16 +15018,6 @@
     "treasury_ratio": 0,
     "dividend_yield": null,
     "last_updated": "2025-05-31T07:22:23.101184"
-  },
-  {
-    "code": "214330",
-    "name": "금호에이치티",
-    "current_price": 679.0,
-    "intrinsic_value": 324.96885566826836,
-    "safety_margin": -52.14008016667624,
-    "treasury_ratio": 6.35,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
     "code": "239610",
@@ -15310,16 +15310,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "453450",
-    "name": "그리드위즈",
-    "current_price": 18020.0,
-    "intrinsic_value": 8261.0,
-    "safety_margin": -54.15649278579357,
-    "treasury_ratio": 0,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "002960",
     "name": "한국쉘석유",
     "current_price": 402500.0,
@@ -15358,6 +15348,16 @@
     "treasury_ratio": 0.14,
     "dividend_yield": 7.04,
     "last_updated": "2025-05-29T09:39:42.121797"
+  },
+  {
+    "code": "453450",
+    "name": "그리드위즈",
+    "current_price": 18160.0,
+    "intrinsic_value": 8261.0,
+    "safety_margin": -54.50991189427313,
+    "treasury_ratio": 0,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "002700",
@@ -16180,6 +16180,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "251120",
+    "name": "바이오에프디엔씨",
+    "current_price": 16680.0,
+    "intrinsic_value": 6616.367591082109,
+    "safety_margin": -60.33352763140222,
+    "treasury_ratio": 1.92,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:01:12.354409"
+  },
+  {
     "code": "052400",
     "name": "코나아이",
     "current_price": 43450.0,
@@ -16298,16 +16308,6 @@
     "treasury_ratio": 0.36,
     "dividend_yield": null,
     "last_updated": "2025-05-31T07:22:23.101184"
-  },
-  {
-    "code": "251120",
-    "name": "바이오에프디엔씨",
-    "current_price": 17150.0,
-    "intrinsic_value": 6616.367591082109,
-    "safety_margin": -61.42059713654747,
-    "treasury_ratio": 1.92,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
     "code": "039130",
@@ -16590,6 +16590,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "264850",
+    "name": "이랜시스",
+    "current_price": 4700.0,
+    "intrinsic_value": 1699.3333333333333,
+    "safety_margin": -63.843971631205676,
+    "treasury_ratio": 0,
+    "dividend_yield": 1.06,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "252990",
     "name": "샘씨엔에스",
     "current_price": 4585.0,
@@ -16730,16 +16740,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "264850",
-    "name": "이랜시스",
-    "current_price": 4885.0,
-    "intrinsic_value": 1699.3333333333333,
-    "safety_margin": -65.21323780279769,
-    "treasury_ratio": 0,
-    "dividend_yield": 1.02,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "123860",
     "name": "아나패스",
     "current_price": 18290.0,
@@ -16850,6 +16850,16 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
+    "code": "060570",
+    "name": "드림어스컴퍼니",
+    "current_price": 1893.0,
+    "intrinsic_value": 639.1666666666666,
+    "safety_margin": -66.23525268533193,
+    "treasury_ratio": 0,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:01:12.354409"
+  },
+  {
     "code": "298830",
     "name": "슈어소프트테크",
     "current_price": 5140.0,
@@ -16946,16 +16956,6 @@
     "intrinsic_value": 3448.0199689671463,
     "safety_margin": -66.75004851526379,
     "treasury_ratio": 1.18,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
-    "code": "060570",
-    "name": "드림어스컴퍼니",
-    "current_price": 1923.0,
-    "intrinsic_value": 639.1666666666666,
-    "safety_margin": -66.76200381348588,
-    "treasury_ratio": 0,
     "dividend_yield": null,
     "last_updated": "2025-05-29T09:39:42.121797"
   },
@@ -18610,16 +18610,6 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
-    "code": "191420",
-    "name": "테고사이언스",
-    "current_price": 18430.0,
-    "intrinsic_value": 3744.007832016745,
-    "safety_margin": -79.68525321748918,
-    "treasury_ratio": 1.26,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "000105",
     "name": "유한양행우",
     "current_price": 98300.0,
@@ -18778,6 +18768,16 @@
     "treasury_ratio": 0,
     "dividend_yield": 0.48,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "191420",
+    "name": "테고사이언스",
+    "current_price": 19600.0,
+    "intrinsic_value": 3744.007832016745,
+    "safety_margin": -80.89791922440436,
+    "treasury_ratio": 1.26,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:01:12.354409"
   },
   {
     "code": "078600",
@@ -19750,16 +19750,6 @@
     "last_updated": "2025-05-31T07:22:23.101184"
   },
   {
-    "code": "361390",
-    "name": "제노코",
-    "current_price": 19000.0,
-    "intrinsic_value": 1927.5,
-    "safety_margin": -89.85526315789474,
-    "treasury_ratio": 0,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "204620",
     "name": "글로벌텍스프리",
     "current_price": 5930.0,
@@ -19768,6 +19758,16 @@
     "treasury_ratio": 0,
     "dividend_yield": null,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "361390",
+    "name": "제노코",
+    "current_price": 19270.0,
+    "intrinsic_value": 1927.5,
+    "safety_margin": -89.99740529320187,
+    "treasury_ratio": 0,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "085660",
@@ -20302,12 +20302,12 @@
   {
     "code": "317870",
     "name": "엔바이오니아",
-    "current_price": 16900.0,
+    "current_price": 16870.0,
     "intrinsic_value": 803.3333333333335,
-    "safety_margin": -95.24654832347139,
+    "safety_margin": -95.23809523809523,
     "treasury_ratio": 0,
     "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "002420",
@@ -23410,16 +23410,6 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
-    "code": "456070",
-    "name": "이엔셀",
-    "current_price": 13350.0,
-    "intrinsic_value": -7253.0,
-    "safety_margin": -154.32958801498125,
-    "treasury_ratio": 0,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
     "code": "017040",
     "name": "광명전기",
     "current_price": 2140.0,
@@ -23448,6 +23438,16 @@
     "treasury_ratio": 0.46,
     "dividend_yield": null,
     "last_updated": "2025-05-31T07:22:23.101184"
+  },
+  {
+    "code": "456070",
+    "name": "이엔셀",
+    "current_price": 13090.0,
+    "intrinsic_value": -7253.0,
+    "safety_margin": -155.4087089381207,
+    "treasury_ratio": 0,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:04:42.796016"
   },
   {
     "code": "189330",
@@ -25890,6 +25890,16 @@
     "last_updated": "2025-05-29T09:39:42.121797"
   },
   {
+    "code": "088800",
+    "name": "에이스테크",
+    "current_price": 2500.0,
+    "intrinsic_value": -9989.652179718274,
+    "safety_margin": -499.58608718873097,
+    "treasury_ratio": 0.14,
+    "dividend_yield": null,
+    "last_updated": "2025-05-31T09:04:42.796016"
+  },
+  {
     "code": "080720",
     "name": "한국유니온제약",
     "current_price": 2725.0,
@@ -26066,16 +26076,6 @@
     "intrinsic_value": -5190.280835167767,
     "safety_margin": -612.3673085061961,
     "treasury_ratio": 0.06,
-    "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
-  },
-  {
-    "code": "088800",
-    "name": "에이스테크",
-    "current_price": 1920.0,
-    "intrinsic_value": -9989.652179718274,
-    "safety_margin": -620.2943843603267,
-    "treasury_ratio": 0.14,
     "dividend_yield": null,
     "last_updated": "2025-05-29T09:39:42.121797"
   },
@@ -26427,7 +26427,7 @@
     "safety_margin": -1403.7152852915049,
     "treasury_ratio": 0.33,
     "dividend_yield": null,
-    "last_updated": "2025-05-29T09:39:42.121797"
+    "last_updated": "2025-05-31T09:01:12.354409"
   },
   {
     "code": "258830",
