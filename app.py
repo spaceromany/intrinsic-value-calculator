@@ -180,21 +180,21 @@ def add_to_watchlist():
         purchase_price = float(data['purchase_price'])
         purchase_quantity = int(data['purchase_quantity'])
         
-        print(f"Processing stock: {code}, price: {purchase_price}, quantity: {purchase_quantity}")  # 디버깅 로그 추가
+        # print(f"Processing stock: {code}, price: {purchase_price}, quantity: {purchase_quantity}")  # 디버깅 로그 추가
 
         # Read stock information from all_safety_margin_results.json
         with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
             stocks = json.load(f)
             stock = next((s for s in stocks if s['code'] == code), None)
             if not stock:
-                print(f"Stock not found: {code}")  # 디버깅 로그 추가
+                # print(f"Stock not found: {code}")  # 디버깅 로그 추가
                 return jsonify({'error': 'Stock not found'}), 404
 
         # Add purchase price and quantity to stock data
         stock['purchase_price'] = purchase_price
         stock['purchase_quantity'] = purchase_quantity
         
-        print("Returning stock data:", stock)  # 디버깅 로그 추가
+        # print("Returning stock data:", stock)  # 디버깅 로그 추가
         return jsonify(stock)
 
     except Exception as e:
@@ -222,7 +222,7 @@ def export_watchlist():
             return jsonify({'error': '데이터가 필요합니다.'}), 400
 
         # 필터링된 종목 내보내기
-        print(data)
+        # print(data)
         stocks = data['stocks']
         sheet_name = '안전마진 상위종목'
         limit = data.get('limit', 30)
@@ -291,15 +291,15 @@ def get_watchlist_data():
     try:
         data = request.get_json()
         watchlist = data.get('watchlist', [])
-        print(f"Received watchlist request with {len(watchlist)} items")
+        # print(f"Received watchlist request with {len(watchlist)} items")
         
         if not watchlist:
-            print("Watchlist is empty")
+            # print("Watchlist is empty")
             return jsonify([])
             
         stocks = []
         for item in watchlist:
-            print(f"Processing stock: {item['code']}")
+            # print(f"Processing stock: {item['code']}")
             # all_safety_margin_results.json에서 직접 데이터 읽기
             with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)
@@ -316,10 +316,10 @@ def get_watchlist_data():
                         'last_update': stock.get('last_updated', None)
                     }
                     stocks.append(stock_data)
-                else:
-                    print(f"Stock not found: {item['code']}")
+                # else:
+                #     print(f"Stock not found: {item['code']}")
                 
-        print(f"Returning {len(stocks)} stocks")
+        # print(f"Returning {len(stocks)} stocks")
         return jsonify(stocks)
     except Exception as e:
         print(f"Error in get_watchlist_data: {str(e)}")
@@ -415,11 +415,11 @@ def get_posts():
                 # URL에서 관심종목 데이터 가져오기
                 watchlist_json = request.args.get('watchlist', '[]')
                 watchlist = json.loads(watchlist_json)
-                print(f"받은 관심종목 데이터: {len(watchlist)}개 항목")
+                # print(f"받은 관심종목 데이터: {len(watchlist)}개 항목")
                 
                 # 관심종목 코드 목록 추출
                 watchlist_codes = [item['code'] for item in watchlist]
-                print(f"관심종목 코드: {watchlist_codes}")
+                # print(f"관심종목 코드: {watchlist_codes}")
                 
                 # 관심종목이 있는 게시물만 필터링
                 if watchlist_codes:
@@ -431,11 +431,11 @@ def get_posts():
                         if isinstance(post['stocks'], list):
                             # 게시물의 종목 코드와 관심종목 코드 비교
                             post_stocks = [stock['code'] if isinstance(stock, dict) else stock for stock in post['stocks']]
-                            print(f"게시물 {post['id']} 종목: {post_stocks}")
+                            # print(f"게시물 {post['id']} 종목: {post_stocks}")
                             if any(code in watchlist_codes for code in post_stocks):
                                 filtered_posts.append(post)
                     
-                    print(f"필터링된 게시물 수: {len(filtered_posts)}")
+                    # print(f"필터링된 게시물 수: {len(filtered_posts)}")
                     result.data = filtered_posts
                 else:
                     print("관심종목이 없습니다.")
@@ -629,33 +629,33 @@ def get_posts():
 def delete_post(post_id):
     try:
         device_id = get_device_id()
-        print(f"Attempting to delete post {post_id} for device {device_id}")
+        # print(f"Attempting to delete post {post_id} for device {device_id}")
         
         # 게시물이 해당 디바이스에서 작성된 것인지 확인
         result = supabase.table('posts').select('*').eq('id', post_id).eq('device_id', device_id).execute()
-        print(f"Query result: {result.data}")
+        # print(f"Query result: {result.data}")
         
         if not result.data:
-            print(f"Post not found or not owned by device {device_id}")
+            # print(f"Post not found or not owned by device {device_id}")
             return jsonify({'error': '삭제 권한이 없습니다.'}), 403
         
         # 게시물 삭제 시도
         try:
             delete_result = supabase.table('posts').delete().eq('id', post_id).eq('device_id', device_id).execute()
-            print(f"Delete result: {delete_result}")
+            # print(f"Delete result: {delete_result}")
             
             # 삭제 후 게시물이 실제로 삭제되었는지 확인
             verify_result = supabase.table('posts').select('*').eq('id', post_id).execute()
-            print(f"Verify result: {verify_result.data}")
+            # print(f"Verify result: {verify_result.data}")
             
             if verify_result.data:
-                print("Post still exists after delete operation")
+                # print("Post still exists after delete operation")
                 return jsonify({'error': '게시물 삭제에 실패했습니다.'}), 500
                 
             return jsonify({'message': '게시물이 삭제되었습니다.'})
             
         except Exception as delete_error:
-            print(f"Delete operation error: {str(delete_error)}")
+            # print(f"Delete operation error: {str(delete_error)}")
             return jsonify({'error': '게시물 삭제 중 오류가 발생했습니다.'}), 500
 
     except Exception as e:
@@ -667,7 +667,7 @@ def get_comments(post_id):
     try:
         # 댓글 조회
         result = supabase.table('comments').select('*').eq('post_id', post_id).order('created_at', desc=True).execute()
-        print(result.data)
+        # print(result.data)
         if not result.data:
             return jsonify([])
         

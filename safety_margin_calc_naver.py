@@ -12,6 +12,7 @@ from tqdm import tqdm
 import math
 from bs4 import BeautifulSoup
 import time
+import pytz
 # KRX 종목 목록 파일 경로
 KRX_STOCKS_FILE = 'krx_stocks.json'
 KRX_STOCKS = None
@@ -435,11 +436,15 @@ def analyze_all_stocks(limit: int = 30) -> list:
     results = existing_results.copy()
 
     stock_list = [(row['Code'], row['Name']) for _, row in KRX_STOCKS.iterrows()]
-    current_time = datetime.now()
+
+    kst = pytz.timezone("Asia/Seoul")
+    current_time = datetime.now(kst)
+    # current_time = datetime.now()
     skipped_count = 0
+    code_list = []
 
     for i, (code, name) in enumerate(stock_list):
-        print(f"🔍 [{i+1}/{total_stocks}] {code} - {name} 처리 시작", flush=True)
+        # print(f"🔍 [{i+1}/{total_stocks}] {code} - {name} 처리 시작", flush=True)
 
         existing_stock = results_dict.get(code)
 
@@ -451,8 +456,9 @@ def analyze_all_stocks(limit: int = 30) -> list:
 
         try:
             result = analyze_stock(code)
-            print(f"✅ 종목 {code} ({name}) 분석 완료", flush=True)
-            time.sleep(10)
+            # print(f"✅ 종목 {code} ({name}) 분석 완료", flush=True)
+            code_list.append(result['stock_name'])
+            # time.sleep(10)
 
             if not result.get('error'):
                 stock_data = {
@@ -481,7 +487,8 @@ def analyze_all_stocks(limit: int = 30) -> list:
                     results.sort(key=margin_key, reverse=True)
                     with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
                         json.dump(results, f, ensure_ascii=False, indent=2)
-                    print(f"💾 {i + 1}개 종목 분석 결과 저장", flush=True)
+                    print(f"💾 {i + 1}/{total_stocks} 개 종목 분석 결과 저장, 종목: {code_list}", flush=True)
+                    code_list = []
 
         except Exception as e:
             print(f"❗ 종목 {code} ({name}) 분석 중 오류 발생: {e}", flush=True)
