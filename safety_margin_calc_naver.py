@@ -412,7 +412,7 @@ def analyze_all_stocks(limit: int = 30) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
     각 종목별로 마지막 업데이트 시간을 저장하고,
-    4시간이 지나지 않은 종목은 건너뜁니다.
+    1시간이 지나지 않은 종목은 건너뜁니다.
     """
 
     if KRX_STOCKS is None:
@@ -450,7 +450,7 @@ def analyze_all_stocks(limit: int = 30) -> list:
 
         if existing_stock and 'last_updated' in existing_stock:
             last_updated = datetime.fromisoformat(existing_stock['last_updated'])
-            if (current_time - last_updated).total_seconds() < 3600 * 4:
+            if (current_time - last_updated).total_seconds() < 3600:
                 skipped_count += 1
                 continue
 

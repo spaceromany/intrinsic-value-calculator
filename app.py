@@ -785,7 +785,9 @@ def get_post_likes(post_id):
         print(f"좋아요 정보 조회 중 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-
+@app.route('/google6b6e5fdc5623d4eb.html')
+def google_verification():
+    return send_file('static/google6b6e5fdc5623d4eb.html')
 
 if __name__ == '__main__':
 
