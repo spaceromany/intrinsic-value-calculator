@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+        <loc>https://intrinsic-value-calculator.herokuapp.com/</loc>
+        <lastmod>2024-03-19</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>1.0</priority>
+    </url>
+    <url>
+        <loc>https://intrinsic-value-calculator.herokuapp.com/top-stocks</loc>
+        <lastmod>2024-03-19</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.8</priority>
+    </url>
+    <url>
+        <loc>https://intrinsic-value-calculator.herokuapp.com/valuetalk</loc>
+        <lastmod>2024-03-19</lastmod>
+        <changefreq>daily</changefreq>
+        <priority>0.8</priority>
+    </url>
+</urlset> 
