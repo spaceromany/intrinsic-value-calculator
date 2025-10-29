@@ -27,7 +27,7 @@ def background_update():
             print(f"KRX 데이터 업데이트 완료...")
             analyze_all_stocks()
             print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 완료")
-            time.sleep(60)  # 1분
+            time.sleep(120)  # 2분 (느린 서버를 위해 간격 증가)
     except Exception as e:
         print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 중 오류 발생: {str(e)}")
 

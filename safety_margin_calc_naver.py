@@ -57,7 +57,7 @@ def get_stock_data(ticker: str) -> tuple:
         # 메인 페이지에서 재무제표 데이터 가져오기
         url = f"https://finance.naver.com/item/main.naver?code={ticker}"
         headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = requests.get(url, headers=headers, timeout=30)
         resp.raise_for_status()
         doc = html.fromstring(resp.text)
         
@@ -69,7 +69,7 @@ def get_stock_data(ticker: str) -> tuple:
         current_price = None
         try:
             price_url = f"https://finance.naver.com/item/sise.naver?code={ticker}"
-            price_resp = requests.get(price_url, headers=headers)
+            price_resp = requests.get(price_url, headers=headers, timeout=30)
             price_resp.raise_for_status()
             price_doc = html.fromstring(price_resp.text)
             current_price_node = price_doc.xpath('//*[@id="_nowVal"]')
@@ -127,7 +127,7 @@ def get_treasury_stock_info(ticker: str) -> dict:
             'Referer': 'https://finance.naver.com',
             'User-Agent': 'Mozilla/5.0'
         }
-        resp = requests.get(url, headers=headers, timeout=5)
+        resp = requests.get(url, headers=headers, timeout=30)
         resp.raise_for_status()
         
         doc = html.fromstring(resp.text)
@@ -237,7 +237,7 @@ def get_historical_metrics(ticker: str) -> pd.DataFrame:
     """
     url = f"https://finance.naver.com/item/main.naver?code={ticker}"
     headers = {"User-Agent": "Mozilla/5.0"}
-    resp = requests.get(url, headers=headers)
+    resp = requests.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
     
     doc = html.fromstring(resp.text)
@@ -329,7 +329,7 @@ def analyze_stock(ticker: str) -> dict:
     try:
         # 네이버 금융에서 데이터 가져오기
         url = f'https://finance.naver.com/item/main.naver?code={ticker}'
-        response = requests.get(url)
+        response = requests.get(url, timeout=30)
         soup = BeautifulSoup(response.text, 'html.parser')
         
         # 종목명 가져오기
@@ -436,6 +436,21 @@ def analyze_all_stocks(limit: int = 30) -> list:
     results = existing_results.copy()
 
     stock_list = [(row['Code'], row['Name']) for _, row in KRX_STOCKS.iterrows()]
+    
+    # 오래된 종목부터 업데이트하기 위해 last_updated 기준으로 정렬
+    stock_update_times = []
+    for code, name in stock_list:
+        existing_stock = results_dict.get(code)
+        if existing_stock and 'last_updated' in existing_stock:
+            last_updated = datetime.fromisoformat(existing_stock['last_updated'])
+        else:
+            # 업데이트된 적 없는 종목은 매우 오래된 시간으로 설정
+            last_updated = datetime(2000, 1, 1, tzinfo=pytz.timezone("Asia/Seoul"))
+        stock_update_times.append((code, name, last_updated))
+    
+    # 오래된 순서로 정렬
+    stock_update_times.sort(key=lambda x: x[2])
+    stock_list = [(code, name) for code, name, _ in stock_update_times]
 
     kst = pytz.timezone("Asia/Seoul")
     current_time = datetime.now(kst)
@@ -482,8 +497,8 @@ def analyze_all_stocks(limit: int = 30) -> list:
                 else:
                     results.append(stock_data)
 
-                # 10개마다 저장
-                if (i + 1) % 10 == 0:
+                # 5개마다 저장 (느린 서버를 위해 더 자주 저장)
+                if (i + 1) % 5 == 0:
                     results.sort(key=margin_key, reverse=True)
                     with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
                         json.dump(results, f, ensure_ascii=False, indent=2)
