@@ -13,40 +13,115 @@ import math
 from bs4 import BeautifulSoup
 import time
 import pytz
+from supabase import create_client, Client
+from dotenv import load_dotenv
+
+# 환경 변수 로드
+load_dotenv()
+
+# Supabase 설정
+SUPABASE_URL = os.getenv('SUPABASE_URL')
+SUPABASE_KEY = os.getenv('SUPABASE_KEY')
+SUPABASE_BUCKET = 'stock-data'  # Storage 버킷 이름
+
+supabase: Client = None
+
+def get_supabase_client():
+    """Supabase 클라이언트 반환 (싱글톤)"""
+    global supabase
+    if supabase is None and SUPABASE_URL and SUPABASE_KEY:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+    return supabase
+
+def upload_to_supabase(file_name: str, data: list) -> bool:
+    """JSON 데이터를 Supabase Storage에 업로드"""
+    try:
+        client = get_supabase_client()
+        if client is None:
+            print("Supabase 클라이언트 없음, 로컬 저장만 수행")
+            return False
+
+        json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+
+        # 기존 파일 삭제 후 업로드 (upsert)
+        try:
+            client.storage.from_(SUPABASE_BUCKET).remove([file_name])
+        except:
+            pass  # 파일이 없으면 무시
+
+        result = client.storage.from_(SUPABASE_BUCKET).upload(
+            file_name,
+            json_bytes,
+            file_options={"content-type": "application/json"}
+        )
+        print(f"✅ Supabase Storage 업로드 완료: {file_name}")
+        return True
+    except Exception as e:
+        print(f"❌ Supabase Storage 업로드 실패: {e}")
+        return False
+
+def download_from_supabase(file_name: str) -> list:
+    """Supabase Storage에서 JSON 데이터 다운로드"""
+    try:
+        client = get_supabase_client()
+        if client is None:
+            return None
+
+        response = client.storage.from_(SUPABASE_BUCKET).download(file_name)
+        data = json.loads(response.decode('utf-8'))
+        print(f"✅ Supabase Storage에서 다운로드 완료: {file_name} ({len(data)}개 항목)")
+        return data
+    except Exception as e:
+        print(f"⚠️ Supabase Storage 다운로드 실패: {e}")
+        return None
+
 # KRX 종목 목록 파일 경로
 KRX_STOCKS_FILE = 'krx_stocks.json'
+RESULTS_FILE = 'all_safety_margin_results.json'
 KRX_STOCKS = None
 
 def load_krx_stocks():
     """KRX 종목 목록을 파일에서 로드하거나 업데이트"""
     global KRX_STOCKS
-    
-    # 파일이 존재하는지 확인
+
+    # 먼저 기존 파일이 있으면 로드
     if os.path.exists(KRX_STOCKS_FILE):
-        # 파일의 수정 시간 확인
+        try:
+            with open(KRX_STOCKS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                KRX_STOCKS = pd.DataFrame(data)
+                print(f"KRX 종목 목록 파일 로드 완료: {len(KRX_STOCKS)}개 종목")
+        except Exception as e:
+            print(f"KRX 종목 목록 파일 로드 중 오류 발생: {e}")
+
+    # 파일의 수정 시간 확인하여 하루가 지났으면 업데이트 시도
+    if os.path.exists(KRX_STOCKS_FILE):
         file_time = datetime.fromtimestamp(os.path.getmtime(KRX_STOCKS_FILE))
         now = datetime.now()
-        
-        # 하루가 지났는지 확인
+
         if now - file_time < timedelta(days=1):
-            # 하루가 지나지 않았다면 파일에서 로드
-            try:
-                with open(KRX_STOCKS_FILE, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    KRX_STOCKS = pd.DataFrame(data)
-                return
-            except Exception as e:
-                print(f"KRX 종목 목록 파일 로드 중 오류 발생: {e}")
-    
-    # 파일이 없거나 하루가 지났다면 새로 다운로드
+            # 하루가 지나지 않았다면 기존 데이터 사용
+            return
+
+    # 파일이 없거나 하루가 지났다면 새로 다운로드 시도
     try:
-        KRX_STOCKS = fdr.StockListing('KRX')
-        # DataFrame을 JSON으로 저장
-        with open(KRX_STOCKS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(KRX_STOCKS.to_dict('records'), f, ensure_ascii=False, indent=2)
+        new_stocks = fdr.StockListing('KRX')
+        if new_stocks is not None and len(new_stocks) > 0:
+            KRX_STOCKS = new_stocks
+            # DataFrame을 JSON으로 저장
+            with open(KRX_STOCKS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(KRX_STOCKS.to_dict('records'), f, ensure_ascii=False, indent=2)
+            print(f"KRX 종목 목록 다운로드 완료: {len(KRX_STOCKS)}개 종목")
+        else:
+            if KRX_STOCKS is not None:
+                print(f"KRX API 응답 없음, 기존 캐시 데이터 사용 ({len(KRX_STOCKS)}개 종목)")
+            else:
+                print("KRX 종목 목록 다운로드 실패, 캐시 데이터도 없음")
     except Exception as e:
-        print(f"KRX 종목 목록 다운로드 중 오류 발생: {e}")
-        KRX_STOCKS = None
+        if KRX_STOCKS is not None:
+            print(f"KRX API 오류 (기존 캐시 데이터 사용 중: {len(KRX_STOCKS)}개 종목)")
+        else:
+            print(f"KRX 종목 목록 다운로드 중 오류 발생: {e}")
 
 def get_stock_data(ticker: str) -> tuple:
     """
@@ -408,6 +483,49 @@ def margin_key(x):
         return float('-inf')
     return m
 
+def load_results_data() -> list:
+    """
+    결과 데이터를 로드합니다.
+    1. 로컬 파일 확인
+    2. 없으면 Supabase Storage에서 다운로드
+    """
+    # 로컬 파일 확인
+    if os.path.exists(RESULTS_FILE):
+        try:
+            with open(RESULTS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if data:
+                    print(f"📁 로컬 파일에서 로드: {len(data)}개 종목")
+                    return data
+        except Exception as e:
+            print(f"⚠️ 로컬 파일 로드 실패: {e}")
+
+    # Supabase Storage에서 다운로드
+    data = download_from_supabase(RESULTS_FILE)
+    if data:
+        # 로컬에도 저장
+        try:
+            with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            print(f"📁 Supabase에서 다운로드 후 로컬 저장 완료")
+        except Exception as e:
+            print(f"⚠️ 로컬 저장 실패: {e}")
+        return data
+
+    return []
+
+def save_results_data(results: list):
+    """결과 데이터를 로컬과 Supabase Storage에 저장"""
+    # 로컬 저장
+    try:
+        with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"⚠️ 로컬 저장 실패: {e}")
+
+    # Supabase Storage 업로드
+    upload_to_supabase(RESULTS_FILE, results)
+
 def analyze_all_stocks(limit: int = 30) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
@@ -418,18 +536,12 @@ def analyze_all_stocks(limit: int = 30) -> list:
     if KRX_STOCKS is None:
         print("❗ KRX_STOCKS is None. 데이터 없음", flush=True)
         return []
-    
+
     total_stocks = len(KRX_STOCKS)
     print(f"\n📊 전체 {total_stocks}개 종목 분석 시작...", flush=True)
 
-    # 기존 결과 로드
-    existing_results = []
-    if os.path.exists('all_safety_margin_results.json'):
-        try:
-            with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-                existing_results = json.load(f)
-        except Exception as e:
-            print(f"❗ 기존 결과 파일 로드 중 오류 발생: {e}", flush=True)
+    # 기존 결과 로드 (로컬 또는 Supabase)
+    existing_results = load_results_data()
 
     # dict로 변환하여 빠른 조회 가능하게
     results_dict = {item['code']: item for item in existing_results}
@@ -497,25 +609,28 @@ def analyze_all_stocks(limit: int = 30) -> list:
                 else:
                     results.append(stock_data)
 
-                # 5개마다 저장 (느린 서버를 위해 더 자주 저장)
-                if (i + 1) % 5 == 0:
+                # 10개마다 로컬 저장
+                if (i + 1) % 10 == 0:
                     results.sort(key=margin_key, reverse=True)
-                    with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
+                    with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
                         json.dump(results, f, ensure_ascii=False, indent=2)
                     print(f"💾 {i + 1}/{total_stocks} 개 종목 분석 결과 저장, 종목: {code_list}", flush=True)
                     code_list = []
 
+                # 100개마다 Supabase 업로드
+                if (i + 1) % 100 == 0:
+                    upload_to_supabase(RESULTS_FILE, results)
+
         except Exception as e:
             print(f"❗ 종목 {code} ({name}) 분석 중 오류 발생: {e}", flush=True)
             results.sort(key=margin_key, reverse=True)
-            with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
+            with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
             continue
 
-    # 최종 저장
+    # 최종 저장 (로컬 + Supabase)
     results.sort(key=margin_key, reverse=True)
-    with open('all_safety_margin_results.json', 'w', encoding='utf-8') as f:
-        json.dump(results, f, ensure_ascii=False, indent=2)
+    save_results_data(results)
 
     print(f"\n✅ 분석 완료: {len(results)}개 종목 분석 성공", flush=True)
     print(f"⏩ 건너뛴 종목 수: {skipped_count}", flush=True)

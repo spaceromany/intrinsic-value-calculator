@@ -39,6 +39,6 @@ Thumbs.db
 .env
 .env.*
 
-# Environment Variables
-.env
-.env.* 
+# Data files (stored in Supabase Storage)
+all_safety_margin_results.json
+krx_stocks.json
