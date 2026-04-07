@@ -10,7 +10,7 @@ import json
 import os
 from tqdm import tqdm
 import math
-from bs4 import BeautifulSoup
+
 import time
 import pytz
 from supabase import create_client, Client
@@ -41,7 +41,7 @@ def upload_to_supabase(file_name: str, data: list) -> bool:
             print("Supabase 클라이언트 없음, 로컬 저장만 수행")
             return False
 
-        json_bytes = json.dumps(data, ensure_ascii=False, indent=2).encode('utf-8')
+        json_bytes = json.dumps(data, ensure_ascii=False).encode('utf-8')
 
         # 기존 파일 삭제 후 업로드 (upsert)
         try:
@@ -110,7 +110,7 @@ def load_krx_stocks():
             KRX_STOCKS = new_stocks
             # DataFrame을 JSON으로 저장
             with open(KRX_STOCKS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(KRX_STOCKS.to_dict('records'), f, ensure_ascii=False, indent=2)
+                json.dump(KRX_STOCKS.to_dict('records'), f, ensure_ascii=False)
             print(f"KRX 종목 목록 다운로드 완료: {len(KRX_STOCKS)}개 종목")
         else:
             if KRX_STOCKS is not None:
@@ -122,76 +122,6 @@ def load_krx_stocks():
             print(f"KRX API 오류 (기존 캐시 데이터 사용 중: {len(KRX_STOCKS)}개 종목)")
         else:
             print(f"KRX 종목 목록 다운로드 중 오류 발생: {e}")
-
-def get_stock_data(ticker: str) -> tuple:
-    """
-    주식 데이터를 한 번의 API 호출로 가져옵니다.
-    현재가와 재무제표 데이터를 포함합니다.
-    """
-    try:
-        # 메인 페이지에서 재무제표 데이터 가져오기
-        url = f"https://finance.naver.com/item/main.naver?code={ticker}"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, headers=headers, timeout=30)
-        resp.raise_for_status()
-        doc = html.fromstring(resp.text)
-        
-        # 종목명 추출
-        stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
-        stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
-        
-        # 현재가 추출 (시세 페이지에서 가져오기)
-        current_price = None
-        try:
-            price_url = f"https://finance.naver.com/item/sise.naver?code={ticker}"
-            price_resp = requests.get(price_url, headers=headers, timeout=30)
-            price_resp.raise_for_status()
-            price_doc = html.fromstring(price_resp.text)
-            current_price_node = price_doc.xpath('//*[@id="_nowVal"]')
-            if current_price_node:
-                current_price = float(current_price_node[0].text_content().strip().replace(',', ''))
-        except Exception as e:
-            print(f"현재가 조회 중 오류 발생: {e}")
-
-        # 재무지표 XPath
-        xpaths = {
-            'PBR': [
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[1]',
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[2]',
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[3]',
-            ],
-            'EPS': [
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[1]',
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[2]',
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[3]',
-            ],
-            'BPS': [
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[1]',
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[2]',
-                '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[3]',
-            ]
-        }
-
-        def extract(xpath: str):
-            node = doc.xpath(xpath)
-            if not node:
-                return None
-            txt = node[0].text_content().strip().replace(",", "").replace("−", "-")
-            try:
-                return float(txt) if '.' in txt else int(txt)
-            except ValueError:
-                return None
-
-        # 데이터 추출
-        data = {key: [extract(xp) for xp in xps] for key, xps in xpaths.items()}
-        periods = ["3년전", "2년전", "직전년도"]
-        df = pd.DataFrame(data, index=periods)
-
-        return df, stock_name, current_price
-
-    except Exception as e:
-        print(f"주식 데이터 조회 중 오류 발생: {e}")
-        return pd.DataFrame(), "Unknown", None
 
 
 def get_treasury_stock_info(ticker: str) -> dict:
@@ -304,135 +234,85 @@ def search_stock_codes(company_name: str) -> list:
         print(f"검색 중 오류 발생: {str(e)}")
         return []
 
-def get_historical_metrics(ticker: str) -> pd.DataFrame:
-    """
-    네이버 금융 메인 페이지에서
-    3년 전·2년 전·직전년도 PBR·EPS·BPS를
-    고정 XPath로 추출합니다.
-    """
-    url = f"https://finance.naver.com/item/main.naver?code={ticker}"
-    headers = {"User-Agent": "Mozilla/5.0"}
-    resp = requests.get(url, headers=headers, timeout=30)
-    resp.raise_for_status()
-    
-    doc = html.fromstring(resp.text)
-    
-    # 종목명 추출
-    stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
-    stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
-    
-    # 현재가 추출 (시세 페이지에서 가져오기)
-    current_price = None
-    try:
-        price_url = f"https://finance.naver.com/item/sise.naver?code={ticker}"
-        price_resp = requests.get(price_url, headers=headers)
-        price_resp.raise_for_status()
-        price_doc = html.fromstring(price_resp.text)
-        current_price_node = price_doc.xpath('//*[@id="_nowVal"]')
-        if current_price_node:
-            current_price = float(current_price_node[0].text_content().strip().replace(',', ''))
-    except Exception as e:
-        print(f"현재가 조회 중 오류 발생: {e}")
 
-    # 자사주 정보 추출
-    treasury_stock_info = get_treasury_stock_info(ticker)
-    
-    # 기간 레이블
-    periods = ["3년전", "2년전", "직전년도"]
-
-    # 고정 XPath 목록 (td[1], td[2], td[3] 순서)
-    pbr_xps = [
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[1]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[2]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[3]',
-    ]
-    eps_xps = [
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[1]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[2]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[3]',
-    ]
-    bps_xps = [
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[1]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[2]',
-        '//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[3]',
-    ]
-
-    def extract(xpath: str):
-        node = doc.xpath(xpath)
-        if not node:
-            return None
-        txt = node[0].text_content().strip().replace(",", "").replace("−", "-")
-        try:
-            # 소수점이 있는 경우 float로, 없는 경우 int로 변환
-            if '.' in txt:
-                return float(txt)
-            else:
-                return int(txt)
-        except ValueError:
-            return None
-
-    # 값 추출
-    data = {"PBR": [], "EPS": [], "BPS": []}
-    for xp_pbr, xp_eps, xp_bps in zip(pbr_xps, eps_xps, bps_xps):
-        data["PBR"].append(extract(xp_pbr))
-        data["EPS"].append(extract(xp_eps))
-        data["BPS"].append(extract(xp_bps))
-
-    # DataFrame 생성
-    df = pd.DataFrame(data, index=periods)
-    return df, stock_name, current_price, treasury_stock_info
 
 def analyze_stock(ticker: str) -> dict:
     """
     종목코드를 입력받아 내재가치와 안전마진을 계산하여 반환합니다.
-    
-    Args:
-        ticker (str): 종목코드 (예: '006125')
-        
-    Returns:
-        dict: {
-            'stock_name': str,          # 종목명
-            'current_price': float,     # 현재가
-            'intrinsic_value': float,   # 내재가치
-            'safety_margin': float,     # 안전마진 (%)
-            'treasury_shares': float,   # 자사주 보유 주식수
-            'treasury_ratio': float,    # 자사주 지분율 (%)
-            'historical_data': dict,    # 과거 재무지표 데이터
-            'error': str               # 오류 발생 시 오류 메시지
-        }
+    main.naver 1회 + wisereport 1회 = 총 2회 요청으로 모든 데이터를 수집합니다.
     """
     try:
-        # 네이버 금융에서 데이터 가져오기
-        url = f'https://finance.naver.com/item/main.naver?code={ticker}'
-        response = requests.get(url, timeout=30)
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        # 종목명 가져오기
-        stock_name = soup.select_one('#middle > div.h_company > div.wrap_company > h2 > a').text.strip()
-        
-        # 현재가 가져오기
-        current_price = float(soup.select_one('#chart_area > div.rate_info > div > p.no_today > em > span.blind').text.strip().replace(',', ''))
-        
-        # 배당수익률 가져오기
+        headers = {"User-Agent": "Mozilla/5.0"}
+
+        # 1) main.naver 한 번만 요청 (lxml)
+        url = f"https://finance.naver.com/item/main.naver?code={ticker}"
+        resp = requests.get(url, headers=headers, timeout=30)
+        resp.raise_for_status()
+        doc = html.fromstring(resp.text)
+
+        # 종목명
+        stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
+        stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
+
+        # 현재가
+        current_price = None
+        price_node = doc.xpath('//*[@id="chart_area"]//p[contains(@class,"no_today")]/em/span[contains(@class,"blind")]')
+        if price_node:
+            current_price = float(price_node[0].text_content().strip().replace(',', ''))
+
+        # 배당수익률
         dividend_yield = None
         try:
-            dividend_yield_text = soup.select_one('#_dvr').text.strip()
-            if dividend_yield_text and dividend_yield_text != 'N/A':
-                dividend_yield = float(dividend_yield_text.replace('%', ''))
+            dvr_node = doc.xpath('//*[@id="_dvr"]')
+            if dvr_node:
+                dvr_text = dvr_node[0].text_content().strip()
+                if dvr_text and dvr_text != 'N/A':
+                    dividend_yield = float(dvr_text.replace('%', ''))
         except:
             pass
-        
-        # 재무 데이터 가져오기
-        df, _, _, treasury_stock = get_historical_metrics(ticker)
-        
+
+        # 재무지표 (PBR, EPS, BPS) — 같은 doc에서 추출
+        def extract(xpath: str):
+            node = doc.xpath(xpath)
+            if not node:
+                return None
+            txt = node[0].text_content().strip().replace(",", "").replace("−", "-")
+            try:
+                return float(txt) if '.' in txt else int(txt)
+            except ValueError:
+                return None
+
+        periods = ["3년전", "2년전", "직전년도"]
+        data = {
+            "PBR": [
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[1]'),
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[2]'),
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[3]'),
+            ],
+            "EPS": [
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[1]'),
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[2]'),
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[3]'),
+            ],
+            "BPS": [
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[1]'),
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[2]'),
+                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[3]'),
+            ]
+        }
+        df = pd.DataFrame(data, index=periods)
+
+        # 2) 자사주 정보 (wisereport — 별도 요청)
+        treasury_stock = get_treasury_stock_info(ticker)
+
         # 내재가치 계산
         intrinsic_value = calculate_intrinsic_value(df, treasury_stock)
-
 
         # 안전마진 계산
         safety_margin = None
         if current_price and intrinsic_value:
             safety_margin = ((intrinsic_value - current_price) / current_price) * 100
+
         # 재무지표 데이터 포맷팅
         historical_data = {}
         for _, row in df.iterrows():
@@ -441,7 +321,7 @@ def analyze_stock(ticker: str) -> dict:
                 'EPS': float(row['EPS']) if not pd.isna(row['EPS']) else None,
                 'BPS': float(row['BPS']) if not pd.isna(row['BPS']) else None
             }
-        
+
         return {
             'stock_name': stock_name,
             'current_price': current_price,
@@ -452,7 +332,7 @@ def analyze_stock(ticker: str) -> dict:
             'dividend_yield': dividend_yield,
             'historical_data': historical_data
         }
-        
+
     except Exception as e:
         print(f"종목 {ticker} 분석 중 오류 발생: {e}")
         return {'error': str(e)}
@@ -506,7 +386,7 @@ def load_results_data() -> list:
         # 로컬에도 저장
         try:
             with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
+                json.dump(data, f, ensure_ascii=False)
             print(f"📁 Supabase에서 다운로드 후 로컬 저장 완료")
         except Exception as e:
             print(f"⚠️ 로컬 저장 실패: {e}")
@@ -519,7 +399,7 @@ def save_results_data(results: list):
     # 로컬 저장
     try:
         with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(results, f, ensure_ascii=False, indent=2)
+            json.dump(results, f, ensure_ascii=False)
     except Exception as e:
         print(f"⚠️ 로컬 저장 실패: {e}")
 
@@ -543,9 +423,8 @@ def analyze_all_stocks(limit: int = 30) -> list:
     # 기존 결과 로드 (로컬 또는 Supabase)
     existing_results = load_results_data()
 
-    # dict로 변환하여 빠른 조회 가능하게
+    # dict로 변환하여 빠른 조회 및 업데이트
     results_dict = {item['code']: item for item in existing_results}
-    results = existing_results.copy()
 
     stock_list = [(row['Code'], row['Name']) for _, row in KRX_STOCKS.iterrows()]
     
@@ -599,37 +478,26 @@ def analyze_all_stocks(limit: int = 30) -> list:
                     'last_updated': current_time.isoformat()
                 }
 
-                # dict와 list 동시 업데이트
                 results_dict[code] = stock_data
-                if existing_stock:
-                    for j, item in enumerate(results):
-                        if item['code'] == code:
-                            results[j] = stock_data
-                            break
-                else:
-                    results.append(stock_data)
 
                 # 10개마다 로컬 저장
                 if (i + 1) % 10 == 0:
-                    results.sort(key=margin_key, reverse=True)
+                    results = sorted(results_dict.values(), key=margin_key, reverse=True)
                     with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(results, f, ensure_ascii=False, indent=2)
+                        json.dump(results, f, ensure_ascii=False)
                     print(f"💾 {i + 1}/{total_stocks} 개 종목 분석 결과 저장, 종목: {code_list}", flush=True)
                     code_list = []
 
                 # 100개마다 Supabase 업로드
                 if (i + 1) % 100 == 0:
-                    upload_to_supabase(RESULTS_FILE, results)
+                    upload_to_supabase(RESULTS_FILE, list(results_dict.values()))
 
         except Exception as e:
             print(f"❗ 종목 {code} ({name}) 분석 중 오류 발생: {e}", flush=True)
-            results.sort(key=margin_key, reverse=True)
-            with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(results, f, ensure_ascii=False, indent=2)
             continue
 
     # 최종 저장 (로컬 + Supabase)
-    results.sort(key=margin_key, reverse=True)
+    results = sorted(results_dict.values(), key=margin_key, reverse=True)
     save_results_data(results)
 
     print(f"\n✅ 분석 완료: {len(results)}개 종목 분석 성공", flush=True)

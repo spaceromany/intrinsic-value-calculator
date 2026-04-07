@@ -41,3 +41,5 @@ Thumbs.db
 
 # Data files (stored in Supabase Storage)
 all_safety_margin_results.json
+
+ref/

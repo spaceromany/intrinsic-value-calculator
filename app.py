@@ -10,6 +10,23 @@ import math
 from io import BytesIO
 import random
 
+# 결과 데이터 메모리 캐시
+_results_cache = None
+_results_cache_mtime = 0
+
+def get_results_data():
+    """결과 데이터를 캐싱하여 반환. 파일이 변경된 경우에만 다시 읽음."""
+    global _results_cache, _results_cache_mtime
+    try:
+        mtime = os.path.getmtime('all_safety_margin_results.json')
+        if _results_cache is None or mtime != _results_cache_mtime:
+            with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
+                _results_cache = json.load(f)
+            _results_cache_mtime = mtime
+        return _results_cache, datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return [], ''
+
 def background_update():
     """백그라운드에서 데이터를 업데이트하는 함수"""
     try:
@@ -52,8 +69,7 @@ def index():
 @app.route('/top-stocks')
 def top_stocks():
     try:
-        # 마지막 업데이트 시간 가져오기
-        last_update = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json')).strftime('%Y-%m-%d %H:%M:%S')
+        _, last_update = get_results_data()
         
         # 격언 데이터 로드
         quotes = load_quotes()
@@ -75,12 +91,8 @@ def search():
         return jsonify([])
     
     try:
-        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # 마지막 업데이트 시간 가져오기
-        last_update = datetime.fromtimestamp(os.path.getmtime('all_safety_margin_results.json')).strftime('%Y-%m-%d %H:%M:%S')
-        
+        data, last_update = get_results_data()
+
         # 종목명으로 검색
         results = [stock for stock in data if query.lower() in stock['name'].lower()]
         return jsonify({
@@ -93,11 +105,8 @@ def search():
 @app.route('/filter')
 def filter_stocks():
     try:
-        # print("필터링 시작...")
-        # JSON 파일에서 데이터 읽기
-        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-            stocks = json.load(f)
-        # print(f"총 {len(stocks)}개의 종목 데이터를 읽었습니다.")
+        data, _ = get_results_data()
+        stocks = list(data)  # 캐시 원본 보호를 위해 복사
         
         # 안전마진 기준으로 정렬 (None이나 NaN은 맨 뒤로)
         stocks.sort(key=lambda x: float('-inf') if x.get('safety_margin') is None or math.isnan(x.get('safety_margin', float('-inf'))) else x.get('safety_margin', float('-inf')), reverse=True)
@@ -156,13 +165,11 @@ def add_to_watchlist():
         
         # print(f"Processing stock: {code}, price: {purchase_price}, quantity: {purchase_quantity}")  # 디버깅 로그 추가
 
-        # Read stock information from all_safety_margin_results.json
-        with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-            stocks = json.load(f)
-            stock = next((s for s in stocks if s['code'] == code), None)
-            if not stock:
-                # print(f"Stock not found: {code}")  # 디버깅 로그 추가
-                return jsonify({'error': 'Stock not found'}), 404
+        # Read stock information from cache
+        data, _ = get_results_data()
+        stock = next((s for s in data if s['code'] == code), None)
+        if not stock:
+            return jsonify({'error': 'Stock not found'}), 404
 
         # Add purchase price and quantity to stock data
         stock['purchase_price'] = purchase_price
@@ -271,27 +278,25 @@ def get_watchlist_data():
             # print("Watchlist is empty")
             return jsonify([])
             
+        # 캐시에서 읽고 dict로 변환하여 빠른 조회
+        all_stocks, _ = get_results_data()
+        stock_dict = {s['code']: s for s in all_stocks}
+
         stocks = []
         for item in watchlist:
-            # print(f"Processing stock: {item['code']}")
-            # all_safety_margin_results.json에서 직접 데이터 읽기
-            with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                stock = next((s for s in data if s['code'] == item['code']), None)
-                if stock:
-                    stock_data = {
-                        'code': stock['code'],
-                        'name': stock['name'],
-                        'current_price': stock['current_price'],
-                        'intrinsic_value': stock['intrinsic_value'],
-                        'safety_margin': stock['safety_margin'],
-                        'treasury_ratio': stock.get('treasury_ratio', None),
-                        'dividend_yield': stock.get('dividend_yield', None),
-                        'last_update': stock.get('last_updated', None)
-                    }
-                    stocks.append(stock_data)
-                # else:
-                #     print(f"Stock not found: {item['code']}")
+            stock = stock_dict.get(item['code'])
+            if stock:
+                stock_data = {
+                    'code': stock['code'],
+                    'name': stock['name'],
+                    'current_price': stock['current_price'],
+                    'intrinsic_value': stock['intrinsic_value'],
+                    'safety_margin': stock['safety_margin'],
+                    'treasury_ratio': stock.get('treasury_ratio', None),
+                    'dividend_yield': stock.get('dividend_yield', None),
+                    'last_update': stock.get('last_updated', None)
+                }
+                stocks.append(stock_data)
                 
         # print(f"Returning {len(stocks)} stocks")
         return jsonify(stocks)
