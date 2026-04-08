@@ -75,6 +75,11 @@ def download_from_supabase(file_name: str) -> list:
         print(f"⚠️ Supabase Storage 다운로드 실패: {e}")
         return None
 
+# DART OpenAPI 설정
+DART_API_KEY = os.getenv('DART_API_KEY')
+CORP_CODE_MAP = None  # 종목코드 → corp_code 매핑 딕셔너리
+NCAV_RESULTS_FILE = 'ncav_results.json'
+
 # KRX 종목 목록 파일 경로
 KRX_STOCKS_FILE = 'krx_stocks.json'
 RESULTS_FILE = 'all_safety_margin_results.json'
@@ -107,8 +112,8 @@ def load_krx_stocks():
     try:
         new_stocks = fdr.StockListing('KRX')
         if new_stocks is not None and len(new_stocks) > 0:
-            KRX_STOCKS = new_stocks
-            # DataFrame을 JSON으로 저장
+            # 필요한 컬럼만 유지
+            KRX_STOCKS = new_stocks[['Code', 'Name', 'Marcap']].copy()
             with open(KRX_STOCKS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(KRX_STOCKS.to_dict('records'), f, ensure_ascii=False)
             print(f"KRX 종목 목록 다운로드 완료: {len(KRX_STOCKS)}개 종목")
@@ -508,17 +513,221 @@ def analyze_all_stocks(limit: int = 30) -> list:
 
 
 
+## ── DART API: NCAV 스크리닝 ──────────────────────────────
+
+def load_corp_code_map() -> dict:
+    """DART에서 종목코드 → corp_code 매핑을 다운로드하여 반환"""
+    global CORP_CODE_MAP
+    if CORP_CODE_MAP is not None:
+        return CORP_CODE_MAP
+
+    if not DART_API_KEY:
+        print("❗ DART_API_KEY가 설정되지 않음", flush=True)
+        return {}
+
+    try:
+        import zipfile, io
+        from lxml import etree
+
+        resp = requests.get(
+            'https://opendart.fss.or.kr/api/corpCode.xml',
+            params={'crtfc_key': DART_API_KEY},
+            timeout=60
+        )
+        z = zipfile.ZipFile(io.BytesIO(resp.content))
+        xml_data = z.read(z.namelist()[0])
+        root = etree.fromstring(xml_data)
+
+        CORP_CODE_MAP = {}
+        for corp in root.findall('.//list'):
+            stock_code = corp.findtext('stock_code', '').strip()
+            corp_code = corp.findtext('corp_code', '').strip()
+            if stock_code:
+                CORP_CODE_MAP[stock_code] = corp_code
+
+        print(f"✅ DART corp_code 매핑 로드 완료: {len(CORP_CODE_MAP)}개 상장사", flush=True)
+        return CORP_CODE_MAP
+    except Exception as e:
+        print(f"❌ DART corp_code 매핑 실패: {e}", flush=True)
+        return {}
+
+
+def get_dart_financial(corp_code: str, bsns_year: int, reprt_code: str = '11011') -> dict:
+    """DART API로 단일회사 주요계정 조회"""
+    try:
+        resp = requests.get(
+            'https://opendart.fss.or.kr/api/fnlttSinglAcnt.json',
+            params={
+                'crtfc_key': DART_API_KEY,
+                'corp_code': corp_code,
+                'bsns_year': str(bsns_year),
+                'reprt_code': reprt_code
+            },
+            timeout=30
+        )
+        data = resp.json()
+        if data.get('status') == '000':
+            return data
+        return None
+    except Exception as e:
+        print(f"DART API 오류 (corp_code={corp_code}): {e}")
+        return None
+
+
+def get_latest_financial(corp_code: str) -> dict:
+    """가장 최근 사업보고서의 재무상태표 데이터를 반환"""
+    now = datetime.now()
+    # 사업보고서는 보통 3월 말까지 공시 → 4월부터 전년도 사용 가능
+    if now.month >= 4:
+        start_year = now.year - 1
+    else:
+        start_year = now.year - 2
+
+    # 최대 3년 전까지 시도
+    for year in range(start_year, start_year - 3, -1):
+        data = get_dart_financial(corp_code, year)
+        if data:
+            # 연결재무제표 우선, 없으면 별도 재무제표
+            bs = {}
+            for item in data.get('list', []):
+                if item.get('sj_nm') == '재무상태표':
+                    fs = item.get('fs_nm', '')
+                    acnt = item.get('account_nm', '')
+                    val_str = item.get('thstrm_amount', '').replace(',', '')
+                    if not val_str or val_str == '-':
+                        continue
+                    key = f"{fs}_{acnt}"
+                    try:
+                        bs[key] = int(val_str)
+                    except ValueError:
+                        continue
+
+            # 연결재무제표 우선
+            유동자산 = bs.get('연결재무제표_유동자산') or bs.get('재무제표_유동자산')
+            부채총계 = bs.get('연결재무제표_부채총계') or bs.get('재무제표_부채총계')
+            자산총계 = bs.get('연결재무제표_자산총계') or bs.get('재무제표_자산총계')
+            자본총계 = bs.get('연결재무제표_자본총계') or bs.get('재무제표_자본총계')
+
+            if 유동자산 is not None and 부채총계 is not None:
+                return {
+                    'bsns_year': year,
+                    '유동자산': 유동자산,
+                    '부채총계': 부채총계,
+                    '자산총계': 자산총계,
+                    '자본총계': 자본총계,
+                }
+    return None
+
+
+def calculate_ncav_screening() -> list:
+    """
+    전체 KRX 종목에 대해 NCAV 스크리닝을 수행합니다.
+    NCAV = 유동자산 - 부채총계
+    NCAV > 시가총액 인 종목을 필터링합니다.
+    """
+    if KRX_STOCKS is None:
+        print("❗ KRX_STOCKS is None. load_krx_stocks()를 먼저 호출하세요.", flush=True)
+        return []
+
+    corp_map = load_corp_code_map()
+    if not corp_map:
+        return []
+
+    # KRX에서 시가총액 매핑
+    marcap_dict = {}
+    for _, row in KRX_STOCKS.iterrows():
+        marcap_dict[row['Code']] = {
+            'name': row['Name'],
+            'marcap': row.get('Marcap', 0)
+        }
+
+    # 기존 NCAV 결과 로드 (로컬 → Supabase 폴백)
+    existing_ncav = {}
+    existing_list = None
+    if os.path.exists(NCAV_RESULTS_FILE):
+        try:
+            with open(NCAV_RESULTS_FILE, 'r', encoding='utf-8') as f:
+                existing_list = json.load(f)
+        except Exception:
+            pass
+
+    if not existing_list:
+        existing_list = download_from_supabase(NCAV_RESULTS_FILE)
+        if existing_list:
+            try:
+                with open(NCAV_RESULTS_FILE, 'w', encoding='utf-8') as f:
+                    json.dump(existing_list, f, ensure_ascii=False)
+                print(f"📁 NCAV: Supabase에서 다운로드 후 로컬 저장 완료", flush=True)
+            except Exception:
+                pass
+
+    if existing_list:
+        existing_ncav = {item['code']: item for item in existing_list}
+
+    kst = pytz.timezone("Asia/Seoul")
+    current_time = datetime.now(kst)
+
+    # 이미 분석된 종목은 24시간 내 스킵
+    codes_to_analyze = []
+    for code in marcap_dict:
+        if code in corp_map:
+            existing = existing_ncav.get(code)
+            if existing and 'last_updated' in existing:
+                last_updated = datetime.fromisoformat(existing['last_updated'])
+                if (current_time - last_updated).total_seconds() < 86400:  # 24시간
+                    continue
+            codes_to_analyze.append(code)
+
+    total = len(codes_to_analyze)
+    print(f"\n📊 NCAV 스크리닝 시작: {total}개 종목 분석 예정 (기존 {len(existing_ncav)}개)", flush=True)
+
+    ncav_dict = dict(existing_ncav)
+    analyzed = 0
+
+    for i, code in enumerate(codes_to_analyze):
+        corp_code = corp_map.get(code)
+        if not corp_code:
+            continue
+
+        fin = get_latest_financial(corp_code)
+        if fin:
+            marcap = marcap_dict[code]['marcap']
+            ncav = fin['유동자산'] - fin['부채총계']
+
+            ncav_dict[code] = {
+                'code': code,
+                'name': marcap_dict[code]['name'],
+                'ncav': ncav,
+                'marcap': marcap,
+                'ncav_ratio': round(ncav / marcap * 100, 2) if marcap > 0 else None,
+                '유동자산': fin['유동자산'],
+                '부채총계': fin['부채총계'],
+                '자산총계': fin['자산총계'],
+                '자본총계': fin['자본총계'],
+                'bsns_year': fin['bsns_year'],
+                'ncav_positive': ncav > marcap,
+                'last_updated': current_time.isoformat()
+            }
+            analyzed += 1
+
+        # 50개마다 중간 저장
+        if (i + 1) % 50 == 0:
+            results = sorted(ncav_dict.values(), key=lambda x: x.get('ncav_ratio') or float('-inf'), reverse=True)
+            with open(NCAV_RESULTS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(results, f, ensure_ascii=False)
+            print(f"💾 NCAV [{i+1}/{total}] 중간 저장 ({analyzed}개 분석 완료)", flush=True)
+
+    # 최종 저장
+    results = sorted(ncav_dict.values(), key=lambda x: x.get('ncav_ratio') or float('-inf'), reverse=True)
+    with open(NCAV_RESULTS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(results, f, ensure_ascii=False)
+    upload_to_supabase(NCAV_RESULTS_FILE, results)
+
+    ncav_positive = [r for r in results if r.get('ncav_positive')]
+    print(f"\n✅ NCAV 스크리닝 완료: {len(results)}개 분석, NCAV > 시가총액: {len(ncav_positive)}개", flush=True)
+
+    return results
+
+
 if __name__ == "__main__":
-    # 테스트 코드
     top_stocks = analyze_all_stocks()
-    
-#     print("\n=== 안전마진 상위 종목 ===")
-#     for idx, stock in enumerate(top_stocks, 1):
-#         print(f"\n{idx}위: {stock['name']} ({stock['code']})")
-#         print(f"현재가: {stock['current_price']:,.0f}원")
-#         print(f"내재가치: {stock['intrinsic_value']:,.0f}원")
-#         print(f"안전마진: {stock['safety_margin']:+.1f}%")
-#         if stock['treasury_ratio'] > 0:
-#             print(f"자사주비율: {stock['treasury_ratio']:.1f}%")
-#         if stock['dividend_yield'] is not None:
-#             print(f"배당수익률: {stock['dividend_yield']:.2f}%")

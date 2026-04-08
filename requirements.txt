@@ -4,7 +4,7 @@ requests>=2.26.0
 lxml>=4.9.1
 numpy>=1.24.3
 pandas>=1.5.3
-git+https://github.com/financedata-org/FinanceDataReader.git
+finance-datareader>=0.9.110
 gunicorn>=20.1.0
 xlsxwriter>=3.1.0
 supabase>=1.0.3

@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_file
-from safety_margin_calc_naver import analyze_all_stocks, load_krx_stocks
+from safety_margin_calc_naver import analyze_all_stocks, load_krx_stocks, calculate_ncav_screening, download_from_supabase
 from datetime import datetime
 import os
 import threading
@@ -36,11 +36,28 @@ def background_update():
             print(f"KRX 데이터 업데이트 완료...")
             analyze_all_stocks()
             print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 완료")
+            # NCAV 스크리닝 (DART API, 안전마진 분석 완료 후 실행)
+            try:
+                calculate_ncav_screening()
+                print(f"[{datetime.now()}] NCAV 스크리닝 완료")
+            except Exception as e:
+                print(f"[{datetime.now()}] NCAV 스크리닝 중 오류: {str(e)}")
             time.sleep(120)  # 2분 (느린 서버를 위해 간격 증가)
     except Exception as e:
         print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 중 오류 발생: {str(e)}")
 
 app = Flask(__name__)
+
+# 앱 시작 시 git 미추적 데이터 파일이 없으면 Supabase에서 다운로드
+for filename in ['all_safety_margin_results.json', 'ncav_results.json']:
+    if not os.path.exists(filename):
+        print(f"📥 {filename} 없음, Supabase에서 다운로드 시도...")
+        data = download_from_supabase(filename)
+        if data:
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False)
+            print(f"✅ {filename} 다운로드 완료 ({len(data)}개)")
+
 update_thread = threading.Thread(target=background_update)
 update_thread.daemon = True  # 메인 프로그램이 종료되면 스레드도 함께 종료
 update_thread.start()
@@ -138,12 +155,25 @@ def filter_stocks():
             for key, value in stock.items():
                 if isinstance(value, float) and math.isnan(value):
                     stock[key] = None
-        
+
+        result_stocks = stocks[:actual_limit]
+
+        # NCAV 데이터 합치기 (우선주는 보통주 NCAV 매핑)
+        ncav_data = get_ncav_data()
+        if ncav_data:
+            ncav_dict = {s['code']: s for s in ncav_data}
+            for stock in result_stocks:
+                code = stock.get('code', '')
+                ncav = ncav_dict.get(code)
+                if not ncav and code[-1] != '0':
+                    # 우선주 → 보통주 코드(끝자리 0)로 매핑
+                    ncav = ncav_dict.get(code[:-1] + '0')
+                stock['ncav_ratio'] = ncav.get('ncav_ratio') if ncav else None
+
         result = {
-            'stocks': stocks[:actual_limit],
-            'actual_limit': len(stocks[:actual_limit])
+            'stocks': result_stocks,
+            'actual_limit': len(result_stocks)
         }
-        # print(f"최종 결과: {len(result['stocks'])}개 종목 반환")
         return jsonify(result)
     except Exception as e:
         print(f"필터링 중 오류 발생: {str(e)}")
@@ -304,10 +334,66 @@ def get_watchlist_data():
         print(f"Error in get_watchlist_data: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# NCAV 결과 캐시
+_ncav_cache = None
+_ncav_cache_mtime = 0
+
+def get_ncav_data():
+    """NCAV 결과 데이터를 캐싱하여 반환. 로컬 파일 없으면 Supabase에서 다운로드"""
+    global _ncav_cache, _ncav_cache_mtime
+
+    # 로컬 파일이 없으면 Supabase에서 다운로드
+    if not os.path.exists('ncav_results.json'):
+        data = download_from_supabase('ncav_results.json')
+        if data:
+            try:
+                with open('ncav_results.json', 'w', encoding='utf-8') as f:
+                    json.dump(data, f, ensure_ascii=False)
+                print("📁 NCAV: Supabase에서 다운로드 후 로컬 저장 완료")
+            except Exception:
+                pass
+            _ncav_cache = data
+            _ncav_cache_mtime = os.path.getmtime('ncav_results.json')
+            return _ncav_cache
+
+    try:
+        mtime = os.path.getmtime('ncav_results.json')
+        if _ncav_cache is None or mtime != _ncav_cache_mtime:
+            with open('ncav_results.json', 'r', encoding='utf-8') as f:
+                _ncav_cache = json.load(f)
+            _ncav_cache_mtime = mtime
+        return _ncav_cache
+    except Exception:
+        return []
+
+@app.route('/ncav')
+def ncav_filter():
+    """NCAV 스크리닝 결과 반환"""
+    try:
+        data = get_ncav_data()
+        if not data:
+            return jsonify({'stocks': [], 'total': 0})
+
+        # 필터 옵션
+        only_positive = request.args.get('positive', 'false').lower() == 'true'
+        limit = request.args.get('limit', default=50, type=int)
+
+        if only_positive:
+            data = [s for s in data if s.get('ncav_positive')]
+
+        return jsonify({
+            'stocks': data[:limit],
+            'total': len(data),
+            'ncav_positive_count': len([s for s in get_ncav_data() if s.get('ncav_positive')])
+        })
+    except Exception as e:
+        print(f"NCAV 필터링 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/google6b6e5fdc5623d4eb.html')
 def google_verification():
     return send_file('static/google6b6e5fdc5623d4eb.html')
 
 if __name__ == '__main__':
 
-    app.run(host='0.0.0.0', port=7777, debug=False) 
+    app.run(host='0.0.0.0', port=7777, debug=False)

@@ -16,8 +16,32 @@
             </div>
         </div>
         
-        <!-- 필터 섹션 -->
+        <!-- 정렬 모드 선택 -->
         <div class="mb-4 p-3 bg-light rounded">
+            <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+                <h6 class="mb-0 me-3 fw-bold">정렬 기준:</h6>
+                <div class="btn-group">
+                    <button type="button" class="btn btn-outline-primary active" id="btnSortMargin" onclick="setSortMode('margin')">안전마진</button>
+                    <button type="button" class="btn btn-outline-primary" id="btnSortNcav" onclick="setSortMode('ncav')">
+                        NCAV/시가총액
+                        <i class="fas fa-info-circle ms-1"
+                           data-bs-toggle="tooltip"
+                           data-bs-html="true"
+                           title="<b>NCAV 전략 (벤저민 그레이엄)</b><br><br>
+                                  <b>NCAV</b> = 유동자산 - 총부채<br>
+                                  비유동자산을 0으로 평가하는 극보수적 청산가치<br><br>
+                                  <b>NCAV/시가총액 > 100%</b>이면 청산가치보다 싸게 거래되는 극도로 저평가된 종목<br><br>
+                                  그레이엄은 <b>NCAV/시가총액 > 150%</b>인 종목을 매수 권장<br><br>
+                                  <small>출처: 벤저민 그레이엄 《증권분석》(1934)<br>
+                                  한국 백테스트 연복리 25~30% (강환국, 2002~2016)</small>"
+                           style="cursor: pointer; color: #6c757d;"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 필터 섹션 -->
+        <div class="mb-4 p-3 bg-light rounded" id="filterSection">
             <div class="d-flex flex-wrap align-items-center gap-3">
                 <!-- Top 필터 -->
                 <div class="d-flex align-items-center">
@@ -70,6 +94,61 @@
                         </ul>
                     </div>
                 </div>
+
+                <!-- NCAV/시가총액 범위 필터 -->
+                <div class="d-flex align-items-center w-100 mt-3" id="ncavRangeFilterWrap">
+                    <h6 class="mb-0 me-3 fw-bold text-nowrap">NCAV/시가총액:</h6>
+                    <div class="d-flex align-items-center flex-grow-1 gap-2">
+                        <small class="text-muted text-nowrap" id="ncavRangeMin">-</small>
+                        <input type="range" class="form-range flex-grow-1" id="ncavRangeSlider" min="0" max="100" value="0" step="1" oninput="applyNcavRangeFilter(this.value)">
+                        <small class="text-muted text-nowrap" id="ncavRangeMax">-</small>
+                    </div>
+                    <span class="badge bg-primary ms-2" id="ncavRangeValue">전체</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- NCAV 필터 섹션 (NCAV 모드에서만 표시) -->
+        <div class="mb-4 p-3 bg-light rounded" id="ncavFilterSection" style="display: none;">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">NCAV/시가총액:</h6>
+                    <div class="btn-group d-none d-md-flex">
+                        <button type="button" class="btn btn-outline-primary active" data-ncav="" onclick="filterByNcav(null)">전체</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav="100" onclick="filterByNcav(100)">100% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav="150" onclick="filterByNcav(150)">150% 이상 (그레이엄 권장)</button>
+                    </div>
+                    <div class="dropdown d-md-none">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="currentNcavFilter">전체</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="filterByNcav(null)">전체</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="filterByNcav(100)">100% 이상</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="filterByNcav(150)">150% 이상</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">표시 개수:</h6>
+                    <div class="btn-group d-none d-md-flex">
+                        <button type="button" class="btn btn-outline-primary active" data-ncav-limit="30" onclick="applyNcavLimit(30)">30개</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-limit="50" onclick="applyNcavLimit(50)">50개</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-limit="100" onclick="applyNcavLimit(100)">100개</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-limit="200" onclick="applyNcavLimit(200)">200개</button>
+                    </div>
+                    <div class="dropdown d-md-none">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="currentNcavLimit">30</span>개
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="applyNcavLimit(30)">30개</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="applyNcavLimit(50)">50개</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="applyNcavLimit(100)">100개</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="applyNcavLimit(200)">200개</a></li>
+                        </ul>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -87,8 +166,17 @@
 <script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
 <script>
 let currentDividendFilter = null;
+let currentSortMode = 'margin'; // 'margin' or 'ncav'
+let currentNcavFilter = null;
+let currentNcavLimit = 30;
+let currentMarginStocks = []; // 안전마진 모드에서 로드된 전체 종목 (NCAV 범위 필터용)
+let ncavSliderMin = 0;
+let ncavSliderMax = 0;
 
 document.addEventListener('DOMContentLoaded', function() {
+    // 툴팁 초기화
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    [...tooltipTriggerList].map(el => new bootstrap.Tooltip(el, { html: true, trigger: 'hover' }));
     // 엑셀 내보내기 버튼 이벤트 리스너 추가
     const exportButton = document.getElementById('exportButton');
     if (exportButton) {
@@ -164,71 +252,106 @@ async function loadStocks(limit) {
         const grid = document.getElementById('stocksGrid');
         grid.innerHTML = '';
         
-        // 서버에서 받은 모든 종목 데이터 표시
-        const stocks = data.stocks;
-        
-        for (let i = 0; i < stocks.length; i++) {
-            const stock = stocks[i];
-            
-            const isInWatchlist = window.watchlistManager && 
-                                window.watchlistManager.getWatchlist().some(item => item.code === stock.code);
-            
-            const col = document.createElement('div');
-            col.className = 'col-12 col-sm-6 col-md-4';
-            col.innerHTML = `
-                <div class="card stock-card" onclick="toggleDetails('${stock.code}')">
-                    <div class="card-body position-relative">
-                        <div class="heart-icon" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">
-                            <i class="${isInWatchlist ? 'fas' : 'far'} fa-heart" 
-                               style="color: ${isInWatchlist ? '#dc3545' : '#6c757d'};"></i>
+        // 전체 종목 저장 (NCAV 슬라이더 필터용)
+        currentMarginStocks = data.stocks;
+        updateNcavSliderRange(currentMarginStocks);
+        renderMarginStocks(currentMarginStocks);
+
+    } catch (error) {
+        console.error('데이터 로드 중 오류:', error);
+    }
+}
+
+function updateNcavSliderRange(stocks) {
+    const ratios = stocks.map(s => s.ncav_ratio).filter(r => r !== null && r !== undefined);
+    if (ratios.length === 0) {
+        document.getElementById('ncavRangeFilterWrap').style.display = 'none';
+        return;
+    }
+    document.getElementById('ncavRangeFilterWrap').style.display = '';
+    ncavSliderMin = Math.floor(Math.min(...ratios));
+    ncavSliderMax = Math.ceil(Math.max(...ratios));
+    const slider = document.getElementById('ncavRangeSlider');
+    slider.min = ncavSliderMin;
+    slider.max = ncavSliderMax;
+    slider.value = ncavSliderMin;
+    document.getElementById('ncavRangeMin').textContent = ncavSliderMin + '%';
+    document.getElementById('ncavRangeMax').textContent = ncavSliderMax + '%';
+    document.getElementById('ncavRangeValue').textContent = '전체';
+}
+
+function applyNcavRangeFilter(value) {
+    const threshold = parseInt(value);
+    if (threshold <= ncavSliderMin) {
+        document.getElementById('ncavRangeValue').textContent = '전체';
+    } else {
+        document.getElementById('ncavRangeValue').textContent = threshold + '% 이상';
+    }
+    const filtered = threshold <= ncavSliderMin
+        ? currentMarginStocks
+        : currentMarginStocks.filter(s => s.ncav_ratio !== null && s.ncav_ratio >= threshold);
+    renderMarginStocks(filtered);
+}
+
+function renderMarginStocks(stocks) {
+    const grid = document.getElementById('stocksGrid');
+    grid.innerHTML = '';
+
+    for (let i = 0; i < stocks.length; i++) {
+        const stock = stocks[i];
+        const isInWatchlist = window.watchlistManager &&
+            window.watchlistManager.getWatchlist().some(item => item.code === stock.code);
+
+        const ncavText = stock.ncav_ratio !== null && stock.ncav_ratio !== undefined
+            ? `<small class="text-muted">NCAV/시총: ${stock.ncav_ratio.toFixed(1)}%</small>` : '';
+
+        const col = document.createElement('div');
+        col.className = 'col-12 col-sm-6 col-md-4';
+        col.innerHTML = `
+            <div class="card stock-card" onclick="toggleDetails('${stock.code}')">
+                <div class="card-body position-relative">
+                    <div class="heart-icon" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">
+                        <i class="${isInWatchlist ? 'fas' : 'far'} fa-heart"
+                           style="color: ${isInWatchlist ? '#dc3545' : '#6c757d'};"></i>
+                    </div>
+                    <h5 class="card-title">
+                        <span class="badge bg-primary rank-badge me-2">${i + 1}위</span>
+                        ${stock.name}
+                        <small class="text-muted d-block">${stock.code}</small>
+                    </h5>
+                    <p class="card-text mb-2">
+                        안전마진:
+                        <span class="${stock.safety_margin >= 0 ? 'safety-margin-positive' : 'safety-margin-negative'}">
+                            ${Math.round(stock.safety_margin)}%
+                        </span>
+                        ${ncavText}
+                    </p>
+                    <div id="details-${stock.code}" class="stock-details">
+                        <div class="detail-item">
+                            <span class="detail-label">현재가</span>
+                            <span class="detail-value">${Math.round(stock.current_price).toLocaleString()}원</span>
                         </div>
-                        <h5 class="card-title">
-                            <span class="badge bg-primary rank-badge me-2">${i + 1}위</span>
-                            ${stock.name}
-                            <small class="text-muted d-block">${stock.code}</small>
-                        </h5>
-                        <p class="card-text mb-2">
-                            안전마진: 
-                            <span class="${stock.safety_margin >= 0 ? 'safety-margin-positive' : 'safety-margin-negative'}">
-                                ${Math.round(stock.safety_margin)}%
-                            </span>
-                        </p>
-                        <div id="details-${stock.code}" class="stock-details">
-                            <div class="detail-item">
-                                <span class="detail-label">현재가</span>
-                                <span class="detail-value">${Math.round(stock.current_price).toLocaleString()}원</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">내재가치</span>
-                                <span class="detail-value">${Math.round(stock.intrinsic_value).toLocaleString()}원</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">자사주비율</span>
-                                <span class="detail-value">${stock.treasury_ratio ? Math.round(stock.treasury_ratio) + '%' : '-'}</span>
-                            </div>
-                            <div class="detail-item">
-                                <span class="detail-label">배당수익률</span>
-                                <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
-                            </div>
+                        <div class="detail-item">
+                            <span class="detail-label">내재가치</span>
+                            <span class="detail-value">${Math.round(stock.intrinsic_value).toLocaleString()}원</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">자사주비율</span>
+                            <span class="detail-value">${stock.treasury_ratio ? Math.round(stock.treasury_ratio) + '%' : '-'}</span>
+                        </div>
+                        <div class="detail-item">
+                            <span class="detail-label">배당수익률</span>
+                            <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
                         </div>
                     </div>
                 </div>
-            `;
-            
-            grid.appendChild(col);
-        }
-        
-        // 실제 표시된 종목 수를 표시하는 메시지 추가
-        const actualCount = stocks.length;
-        if (actualCount < parseInt(limit)) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'col-12 text-center text-muted mt-3';
-            messageDiv.textContent = `조건에 맞는 종목이 ${actualCount}개 있습니다.`;
-            grid.appendChild(messageDiv);
-        }
-        
-    } catch (error) {
-        console.error('데이터 로드 중 오류:', error);
+            </div>
+        `;
+        grid.appendChild(col);
+    }
+
+    if (stocks.length === 0) {
+        grid.innerHTML = '<div class="col-12 text-center text-muted mt-3">조건에 맞는 종목이 없습니다.</div>';
     }
 }
 
@@ -278,9 +401,8 @@ function toggleDetails(code) {
 function toggleWatchlist(code) {
     const heartIcon = event.currentTarget.querySelector('i');
     const isInWatchlist = heartIcon.classList.contains('fas');
-    
+
     if (isInWatchlist) {
-        // 관심종목 제거
         if (window.watchlistManager) {
             window.watchlistManager.removeFromWatchlist(code);
             heartIcon.classList.remove('fas');
@@ -288,13 +410,140 @@ function toggleWatchlist(code) {
             heartIcon.style.color = '#6c757d';
         }
     } else {
-        // 관심종목 추가
         if (window.watchlistManager) {
             window.watchlistManager.addToWatchlist(code);
             heartIcon.classList.remove('far');
             heartIcon.classList.add('fas');
             heartIcon.style.color = '#dc3545';
         }
+    }
+}
+
+// ── NCAV 모드 ──
+
+function setSortMode(mode) {
+    currentSortMode = mode;
+    document.getElementById('btnSortMargin').classList.toggle('active', mode === 'margin');
+    document.getElementById('btnSortNcav').classList.toggle('active', mode === 'ncav');
+    document.getElementById('filterSection').style.display = mode === 'margin' ? '' : 'none';
+    document.getElementById('ncavFilterSection').style.display = mode === 'ncav' ? '' : 'none';
+
+    if (mode === 'margin') {
+        loadStocks();
+    } else {
+        loadNcavStocks();
+    }
+}
+
+function filterByNcav(minRatio) {
+    currentNcavFilter = minRatio;
+    document.querySelectorAll('[data-ncav]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-ncav="${minRatio}"]`);
+    if (sel) sel.classList.add('active');
+    const dd = document.getElementById('currentNcavFilter');
+    if (dd) dd.textContent = minRatio === null ? '전체' : `${minRatio}% 이상`;
+    loadNcavStocks();
+}
+
+function applyNcavLimit(limit) {
+    currentNcavLimit = limit;
+    document.querySelectorAll('[data-ncav-limit]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-ncav-limit="${limit}"]`);
+    if (sel) sel.classList.add('active');
+    const dd = document.getElementById('currentNcavLimit');
+    if (dd) dd.textContent = limit;
+    loadNcavStocks();
+}
+
+async function loadNcavStocks() {
+    let url = `/ncav?limit=${currentNcavLimit}`;
+    if (currentNcavFilter !== null) {
+        url += `&positive=true`;
+    }
+
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        let stocks = data.stocks || [];
+
+        // 클라이언트 측 추가 필터 (150% 이상 등)
+        if (currentNcavFilter !== null) {
+            stocks = stocks.filter(s => s.ncav_ratio !== null && s.ncav_ratio >= currentNcavFilter);
+        }
+
+        const grid = document.getElementById('stocksGrid');
+        grid.innerHTML = '';
+
+        if (stocks.length === 0) {
+            grid.innerHTML = '<div class="col-12 text-center text-muted mt-3">조건에 맞는 종목이 없습니다.</div>';
+            return;
+        }
+
+        for (let i = 0; i < stocks.length; i++) {
+            const stock = stocks[i];
+            const isInWatchlist = window.watchlistManager &&
+                window.watchlistManager.getWatchlist().some(item => item.code === stock.code);
+
+            const ncavRatio = stock.ncav_ratio !== null ? stock.ncav_ratio : 0;
+            let badgeClass = 'bg-secondary';
+            if (ncavRatio >= 150) badgeClass = 'bg-success';
+            else if (ncavRatio >= 100) badgeClass = 'bg-warning text-dark';
+
+            const col = document.createElement('div');
+            col.className = 'col-12 col-sm-6 col-md-4';
+            col.innerHTML = `
+                <div class="card stock-card" onclick="toggleDetails('ncav-${stock.code}')">
+                    <div class="card-body position-relative">
+                        <div class="heart-icon" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">
+                            <i class="${isInWatchlist ? 'fas' : 'far'} fa-heart"
+                               style="color: ${isInWatchlist ? '#dc3545' : '#6c757d'};"></i>
+                        </div>
+                        <h5 class="card-title">
+                            <span class="badge bg-primary rank-badge me-2">${i + 1}위</span>
+                            ${stock.name}
+                            <small class="text-muted d-block">${stock.code}</small>
+                        </h5>
+                        <p class="card-text mb-2">
+                            NCAV/시가총액:
+                            <span class="badge ${badgeClass}">${ncavRatio.toFixed(1)}%</span>
+                            ${ncavRatio >= 150 ? '<small class="text-success ms-1">그레이엄 권장</small>' : ''}
+                        </p>
+                        <div id="details-ncav-${stock.code}" class="stock-details">
+                            <div class="detail-item">
+                                <span class="detail-label">NCAV</span>
+                                <span class="detail-value">${(stock.ncav / 1e8).toLocaleString(undefined, {maximumFractionDigits: 0})}억원</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">시가총액</span>
+                                <span class="detail-value">${(stock.marcap / 1e8).toLocaleString(undefined, {maximumFractionDigits: 0})}억원</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">유동자산</span>
+                                <span class="detail-value">${(stock.유동자산 / 1e8).toLocaleString(undefined, {maximumFractionDigits: 0})}억원</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">부채총계</span>
+                                <span class="detail-value">${(stock.부채총계 / 1e8).toLocaleString(undefined, {maximumFractionDigits: 0})}억원</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">사업연도</span>
+                                <span class="detail-value">${stock.bsns_year}년</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            grid.appendChild(col);
+        }
+
+        const totalInfo = document.createElement('div');
+        totalInfo.className = 'col-12 text-center text-muted mt-3';
+        totalInfo.textContent = `전체 ${data.total}개 중 NCAV > 시가총액: ${data.ncav_positive_count}개`;
+        grid.appendChild(totalInfo);
+
+    } catch (error) {
+        console.error('NCAV 데이터 로드 중 오류:', error);
     }
 }
 </script>

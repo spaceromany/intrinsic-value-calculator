@@ -7,8 +7,8 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-4">
             <h2 class="mb-0 fw-bold text-primary">
                 내재가치 계산기
-                <i class="fas fa-info-circle ms-2" 
-                   data-bs-toggle="tooltip" 
+                <i class="fas fa-info-circle ms-2"
+                   data-bs-toggle="tooltip"
                    data-bs-html="true"
                    data-bs-placement="right"
                    title="<h5>내재가치 계산 방법</h5>
@@ -30,7 +30,18 @@
                                 <li>자사주가 없는 경우: 조정하지 않음</li>
                               </ul>
                             </li>
-                          </ul>"
+                          </ul>
+                          <hr>
+                          <h5>NCAV 전략 (벤저민 그레이엄)</h5>
+                          <p>상위종목 탭에서 NCAV/시가총액 정렬을 사용할 수 있습니다.</p>
+                          <ul>
+                            <li><strong>NCAV</strong> = 유동자산 - 총부채</li>
+                            <li>비유동자산을 0으로 평가하는 극보수적 청산가치</li>
+                            <li><strong>NCAV > 시가총액</strong>이면 청산가치보다 싸게 거래</li>
+                            <li>그레이엄은 <strong>NCAV/시가총액 > 150%</strong>인 종목 매수 권장</li>
+                          </ul>
+                          <small>출처: 벤저민 그레이엄 《증권분석》(1934)<br>
+                          한국 백테스트 연복리 25~30% (강환국, 2002~2016)</small>"
                    style="cursor: pointer; color: #6c757d;"></i>
             </h2>
         </div>
