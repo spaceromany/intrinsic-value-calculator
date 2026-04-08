@@ -374,12 +374,24 @@ def ncav_filter():
         if not data:
             return jsonify({'stocks': [], 'total': 0})
 
+        # 안전마진 결과에서 배당수익률 합치기
+        margin_data, _ = get_results_data()
+        if margin_data:
+            div_dict = {s['code']: s.get('dividend_yield') for s in margin_data}
+            for stock in data:
+                code = stock.get('code', '')
+                stock['dividend_yield'] = div_dict.get(code) or div_dict.get(code[:-1] + '0')
+
         # 필터 옵션
         only_positive = request.args.get('positive', 'false').lower() == 'true'
         limit = request.args.get('limit', default=50, type=int)
+        dividend_filter = request.args.get('dividend', type=float)
 
         if only_positive:
             data = [s for s in data if s.get('ncav_positive')]
+
+        if dividend_filter is not None:
+            data = [s for s in data if s.get('dividend_yield') is not None and s['dividend_yield'] >= dividend_filter]
 
         return jsonify({
             'stocks': data[:limit],

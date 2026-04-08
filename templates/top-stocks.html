@@ -21,7 +21,19 @@
             <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
                 <h6 class="mb-0 me-3 fw-bold">정렬 기준:</h6>
                 <div class="btn-group">
-                    <button type="button" class="btn btn-outline-primary active" id="btnSortMargin" onclick="setSortMode('margin')">안전마진</button>
+                    <button type="button" class="btn btn-outline-primary active" id="btnSortMargin" onclick="setSortMode('margin')">
+                        안전마진
+                        <i class="fas fa-info-circle ms-1"
+                           data-bs-toggle="tooltip"
+                           data-bs-html="true"
+                           title="<b>안전마진 (Margin of Safety)</b><br><br>
+                                  <b>안전마진(%)</b> = (내재가치 - 현재가) / 현재가 × 100<br><br>
+                                  <b>내재가치</b> = (EPS 가중평균 × 10 + BPS) ÷ 2<br>
+                                  EPS 가중평균 = (최근 EPS×3 + 전년 EPS×2 + 전전년 EPS×1) ÷ 6<br><br>
+                                  안전마진이 클수록 내재가치 대비 저평가된 종목<br><br>
+                                  <small>출처: 숙향 《이웃집 워런 버핏》</small>"
+                           style="cursor: pointer; color: #6c757d;"></i>
+                    </button>
                     <button type="button" class="btn btn-outline-primary" id="btnSortNcav" onclick="setSortMode('ncav')">
                         NCAV/시가총액
                         <i class="fas fa-info-circle ms-1"
@@ -95,15 +107,14 @@
                     </div>
                 </div>
 
-                <!-- NCAV/시가총액 범위 필터 -->
-                <div class="d-flex align-items-center w-100 mt-3" id="ncavRangeFilterWrap">
+                <!-- NCAV/시가총액 필터 -->
+                <div class="d-flex align-items-center mt-3" id="ncavRangeFilterWrap">
                     <h6 class="mb-0 me-3 fw-bold text-nowrap">NCAV/시가총액:</h6>
-                    <div class="d-flex align-items-center flex-grow-1 gap-2">
-                        <small class="text-muted text-nowrap" id="ncavRangeMin">-</small>
-                        <input type="range" class="form-range flex-grow-1" id="ncavRangeSlider" min="0" max="100" value="0" step="1" oninput="applyNcavRangeFilter(this.value)">
-                        <small class="text-muted text-nowrap" id="ncavRangeMax">-</small>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary active" data-margin-ncav="" onclick="applyMarginNcavFilter(null)">전체</button>
+                        <button type="button" class="btn btn-outline-primary" data-margin-ncav="100" onclick="applyMarginNcavFilter(100)">100% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-margin-ncav="150" onclick="applyMarginNcavFilter(150)">150% 이상</button>
                     </div>
-                    <span class="badge bg-primary ms-2" id="ncavRangeValue">전체</span>
                 </div>
             </div>
         </div>
@@ -129,6 +140,31 @@
                         </ul>
                     </div>
                 </div>
+                <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">배당수익률:</h6>
+                    <div class="btn-group d-none d-md-flex">
+                        <button type="button" class="btn btn-outline-primary active" data-ncav-dividend="" onclick="filterNcavByDividend(null)">전체</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-dividend="1" onclick="filterNcavByDividend(1)">1% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-dividend="3" onclick="filterNcavByDividend(3)">3% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-dividend="5" onclick="filterNcavByDividend(5)">5% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-dividend="7" onclick="filterNcavByDividend(7)">7% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-ncav-dividend="10" onclick="filterNcavByDividend(10)">10% 이상</button>
+                    </div>
+                    <div class="dropdown d-md-none">
+                        <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <span id="currentNcavDividendFilter">전체</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="#" onclick="filterNcavByDividend(null)">전체</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="filterNcavByDividend(1)">1% 이상</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="filterNcavByDividend(3)">3% 이상</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="filterNcavByDividend(5)">5% 이상</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="filterNcavByDividend(7)">7% 이상</a></li>
+                            <li><a class="dropdown-item" href="#" onclick="filterNcavByDividend(10)">10% 이상</a></li>
+                        </ul>
+                    </div>
+                </div>
+
                 <div class="d-flex align-items-center">
                     <h6 class="mb-0 me-3 fw-bold">표시 개수:</h6>
                     <div class="btn-group d-none d-md-flex">
@@ -169,9 +205,9 @@ let currentDividendFilter = null;
 let currentSortMode = 'margin'; // 'margin' or 'ncav'
 let currentNcavFilter = null;
 let currentNcavLimit = 30;
-let currentMarginStocks = []; // 안전마진 모드에서 로드된 전체 종목 (NCAV 범위 필터용)
-let ncavSliderMin = 0;
-let ncavSliderMax = 0;
+let currentNcavDividendFilter = null;
+let currentMarginStocks = []; // 안전마진 모드에서 로드된 전체 종목 (NCAV 필터용)
+let currentMarginNcavFilter = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     // 툴팁 초기화
@@ -252,44 +288,27 @@ async function loadStocks(limit) {
         const grid = document.getElementById('stocksGrid');
         grid.innerHTML = '';
         
-        // 전체 종목 저장 (NCAV 슬라이더 필터용)
+        // 전체 종목 저장 (NCAV 필터용)
         currentMarginStocks = data.stocks;
-        updateNcavSliderRange(currentMarginStocks);
-        renderMarginStocks(currentMarginStocks);
+        // NCAV 데이터가 하나라도 있으면 필터 표시
+        const hasNcav = currentMarginStocks.some(s => s.ncav_ratio !== null && s.ncav_ratio !== undefined);
+        document.getElementById('ncavRangeFilterWrap').style.display = hasNcav ? '' : 'none';
+        applyMarginNcavFilter(currentMarginNcavFilter);
 
     } catch (error) {
         console.error('데이터 로드 중 오류:', error);
     }
 }
 
-function updateNcavSliderRange(stocks) {
-    const ratios = stocks.map(s => s.ncav_ratio).filter(r => r !== null && r !== undefined);
-    if (ratios.length === 0) {
-        document.getElementById('ncavRangeFilterWrap').style.display = 'none';
-        return;
-    }
-    document.getElementById('ncavRangeFilterWrap').style.display = '';
-    ncavSliderMin = Math.floor(Math.min(...ratios));
-    ncavSliderMax = Math.ceil(Math.max(...ratios));
-    const slider = document.getElementById('ncavRangeSlider');
-    slider.min = ncavSliderMin;
-    slider.max = ncavSliderMax;
-    slider.value = ncavSliderMin;
-    document.getElementById('ncavRangeMin').textContent = ncavSliderMin + '%';
-    document.getElementById('ncavRangeMax').textContent = ncavSliderMax + '%';
-    document.getElementById('ncavRangeValue').textContent = '전체';
-}
+function applyMarginNcavFilter(minRatio) {
+    currentMarginNcavFilter = minRatio;
+    document.querySelectorAll('[data-margin-ncav]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-margin-ncav="${minRatio}"]`);
+    if (sel) sel.classList.add('active');
 
-function applyNcavRangeFilter(value) {
-    const threshold = parseInt(value);
-    if (threshold <= ncavSliderMin) {
-        document.getElementById('ncavRangeValue').textContent = '전체';
-    } else {
-        document.getElementById('ncavRangeValue').textContent = threshold + '% 이상';
-    }
-    const filtered = threshold <= ncavSliderMin
+    const filtered = minRatio === null
         ? currentMarginStocks
-        : currentMarginStocks.filter(s => s.ncav_ratio !== null && s.ncav_ratio >= threshold);
+        : currentMarginStocks.filter(s => s.ncav_ratio !== null && s.ncav_ratio >= minRatio);
     renderMarginStocks(filtered);
 }
 
@@ -455,10 +474,23 @@ function applyNcavLimit(limit) {
     loadNcavStocks();
 }
 
+function filterNcavByDividend(dividend) {
+    currentNcavDividendFilter = dividend;
+    document.querySelectorAll('[data-ncav-dividend]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-ncav-dividend="${dividend}"]`);
+    if (sel) sel.classList.add('active');
+    const dd = document.getElementById('currentNcavDividendFilter');
+    if (dd) dd.textContent = dividend === null ? '전체' : `${dividend}% 이상`;
+    loadNcavStocks();
+}
+
 async function loadNcavStocks() {
     let url = `/ncav?limit=${currentNcavLimit}`;
     if (currentNcavFilter !== null) {
         url += `&positive=true`;
+    }
+    if (currentNcavDividendFilter !== null) {
+        url += `&dividend=${currentNcavDividendFilter}`;
     }
 
     try {
@@ -525,6 +557,10 @@ async function loadNcavStocks() {
                             <div class="detail-item">
                                 <span class="detail-label">부채총계</span>
                                 <span class="detail-value">${(stock.부채총계 / 1e8).toLocaleString(undefined, {maximumFractionDigits: 0})}억원</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">배당수익률</span>
+                                <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">사업연도</span>
