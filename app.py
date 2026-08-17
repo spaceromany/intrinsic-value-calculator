@@ -100,8 +100,14 @@ _ncav_cache = RemoteDataCache(NCAV_FILE)
 
 
 def _latest_timestamp(data):
-    """결과 항목들의 last_updated 중 가장 최근 값을 표시용 문자열로 반환."""
-    stamps = [s.get('last_updated') for s in data if s.get('last_updated')]
+    """가장 최근 데이터 갱신 시각을 표시용 문자열로 반환.
+
+    price_updated(주가)를 우선한다. 재무지표(last_updated)는 분기 데이터라
+    최대 7일 주기로 갱신되는데, 그 값을 표시하면 주가가 당일치인데도
+    "일주일 전"으로 보인다. 사용자가 이 시각으로 판단하는 건 주가 신선도다.
+    """
+    stamps = [s.get('price_updated') or s.get('last_updated') for s in data]
+    stamps = [s for s in stamps if s]
     if not stamps:
         return ''
     try:

@@ -104,7 +104,8 @@ python crawl.py
 | `SITE_URL` | 웹앱 | canonical·og:url·sitemap에 쓰이는 절대 URL 기준. 기본 `https://intrinsic-value-calculator.onrender.com`. 호스팅을 옮기거나 커스텀 도메인을 붙이면 이 값만 바꾸면 된다 |
 | `CRAWL_BUDGET_SECONDS` | 크롤러 | 안전마진 분석 시간 상한. 기본 3600 |
 | `NCAV_BUDGET_SECONDS` | 크롤러 | NCAV 스크리닝 시간 상한. 기본 1800 |
-| `STOCK_REFRESH_SECONDS` | 크롤러 | 종목 재분석 주기. 기본 3600 |
+| `FUNDAMENTALS_REFRESH_SECONDS` | 크롤러 | 재무지표(EPS·BPS·자사주) 재크롤링 주기. 기본 7일. 주가는 이 값과 무관하게 매 실행 갱신된다 |
+| `CRAWL_WORKERS` | 크롤러 | 네이버 동시 요청 수. 기본 6. 올리면 빨라지지만 차단 위험 |
 
 크롤러용 값은 GitHub 저장소의 Settings → Secrets and variables → Actions에
 등록합니다. 시간 상한을 두는 이유는 Actions 실행이 무료 분을 초과하거나

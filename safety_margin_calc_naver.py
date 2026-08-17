@@ -12,6 +12,8 @@ from tqdm import tqdm
 import math
 
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import pytz
 from dotenv import load_dotenv
 
@@ -36,8 +38,28 @@ KRX_STOCKS = None
 # 값을 키울수록 아웃바운드 대역폭을 아끼고, 재시작 시 잃는 작업량이 늘어난다.
 SUPABASE_CHECKPOINT_EVERY = int(os.getenv('SUPABASE_CHECKPOINT_EVERY', '500'))
 
-# 종목별 재분석 주기 (초). 기본 1시간
-STOCK_REFRESH_SECONDS = int(os.getenv('STOCK_REFRESH_SECONDS', '3600'))
+# 재무지표(EPS·BPS·자사주) 재크롤링 주기 (초). 기본 7일.
+# 이 값들은 분기마다 바뀌므로 매일 긁을 이유가 없다. 매일 바뀌는 주가는
+# refresh_prices()가 KRX 목록에서 한 번에 받아 갱신한다.
+FUNDAMENTALS_REFRESH_SECONDS = int(os.getenv('FUNDAMENTALS_REFRESH_SECONDS', str(7 * 86400)))
+
+# 네이버 크롤링 동시 요청 수. 너무 올리면 차단당한다.
+CRAWL_WORKERS = int(os.getenv('CRAWL_WORKERS', '6'))
+# 한 묶음을 처리한 뒤 시간 예산을 확인하고 중간 저장한다.
+CRAWL_CHUNK = int(os.getenv('CRAWL_CHUNK', '50'))
+
+# (연결, 응답) 타임아웃. 연결이 5초 안에 안 되면 30초를 기다려도 안 된다.
+# 기존 30초 단일 타임아웃은 실패 1건당 30초를 통째로 버렸다.
+CONNECT_TIMEOUT = float(os.getenv('CONNECT_TIMEOUT', '5'))
+READ_TIMEOUT = float(os.getenv('READ_TIMEOUT', '15'))
+REQUEST_TIMEOUT = (CONNECT_TIMEOUT, READ_TIMEOUT)
+
+# wisereport(자사주 조회)가 연속으로 이만큼 실패하면 그 실행에서는 포기한다.
+# 자사주 정보가 없으면 treasury_ratio=0 으로 계산이 성립하므로,
+# 죽은 호스트에 계속 타임아웃을 쌓는 것보다 낫다.
+TREASURY_FAILURE_LIMIT = int(os.getenv('TREASURY_FAILURE_LIMIT', '20'))
+_treasury_failures = 0
+_treasury_lock = threading.Lock()
 
 def load_krx_stocks(force: bool = False):
     """KRX 종목 목록을 파일에서 로드하거나 업데이트
@@ -72,7 +94,12 @@ def load_krx_stocks(force: bool = False):
         new_stocks = fdr.StockListing('KRX')
         if new_stocks is not None and len(new_stocks) > 0:
             # 필요한 컬럼만 유지
-            KRX_STOCKS = new_stocks[['Code', 'Name', 'Marcap']].copy()
+            # Close(종가)와 Volume(거래량)까지 보존한다. 이 한 번의 응답에
+            # 전 종목 주가가 들어 있으므로, 주가를 얻으려고 종목당 네이버를
+            # 다시 긁을 이유가 없다. Volume은 거래정지 판별에 쓴다.
+            keep = [c for c in ('Code', 'Name', 'Marcap', 'Close', 'Volume')
+                    if c in new_stocks.columns]
+            KRX_STOCKS = new_stocks[keep].copy()
             with open(KRX_STOCKS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(KRX_STOCKS.to_dict('records'), f, ensure_ascii=False)
             print(f"KRX 종목 목록 다운로드 완료: {len(KRX_STOCKS)}개 종목")
@@ -88,15 +115,34 @@ def load_krx_stocks(force: bool = False):
             print(f"KRX 종목 목록 다운로드 중 오류 발생: {e}")
 
 
+def reset_treasury_circuit():
+    """실행 시작 시 서킷 브레이커를 초기화한다."""
+    global _treasury_failures
+    with _treasury_lock:
+        _treasury_failures = 0
+
+
 def get_treasury_stock_info(ticker: str) -> dict:
-    """자사주 정보 조회"""
+    """자사주 정보 조회.
+
+    wisereport가 응답하지 않는 일이 잦다(해외 러너에서 특히). 연속 실패가
+    TREASURY_FAILURE_LIMIT를 넘으면 그 실행에서는 더 시도하지 않는다.
+    자사주 정보가 없으면 ratio=0으로 내재가치 조정만 생략될 뿐 계산은
+    성립하므로, 죽은 호스트에 타임아웃을 계속 쌓는 것보다 낫다.
+    """
+    global _treasury_failures
+
+    with _treasury_lock:
+        if _treasury_failures >= TREASURY_FAILURE_LIMIT:
+            return {'shares': 0, 'ratio': 0}
+
     try:
         url = f"https://navercomp.wisereport.co.kr/v2/company/c1010001.aspx?cmp_cd={ticker}"
         headers = {
             'Referer': 'https://finance.naver.com',
             'User-Agent': 'Mozilla/5.0'
         }
-        resp = requests.get(url, headers=headers, timeout=30)
+        resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         
         doc = html.fromstring(resp.text)
@@ -127,10 +173,19 @@ def get_treasury_stock_info(ticker: str) -> dict:
             except ValueError:
                 pass
         
+        with _treasury_lock:
+            _treasury_failures = 0  # 성공하면 연속 실패 카운터를 되돌린다
         return {'shares': shares, 'ratio': ratio}
-        
+
     except Exception as e:
-        print(f"자사주 정보 조회 중 오류 발생: {e}")
+        with _treasury_lock:
+            _treasury_failures += 1
+            n = _treasury_failures
+        if n <= 3:
+            print(f"자사주 정보 조회 실패 ({ticker}): {type(e).__name__}", flush=True)
+        elif n == TREASURY_FAILURE_LIMIT:
+            print(f"⚠️ 자사주 조회 연속 {n}회 실패 → 이번 실행에서는 중단 "
+                  f"(treasury_ratio=0으로 계산 계속)", flush=True)
         return {'shares': 0, 'ratio': 0}
 
 
@@ -210,7 +265,7 @@ def analyze_stock(ticker: str) -> dict:
 
         # 1) main.naver 한 번만 요청 (lxml)
         url = f"https://finance.naver.com/item/main.naver?code={ticker}"
-        resp = requests.get(url, headers=headers, timeout=30)
+        resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         doc = html.fromstring(resp.text)
 
@@ -375,11 +430,60 @@ def save_results_data(results: list, upload: bool = True):
     if upload:
         upload_to_supabase(RESULTS_FILE, results)
 
+def refresh_prices(results_dict: dict, current_time) -> int:
+    """KRX 목록의 종가로 전 종목 주가와 안전마진을 갱신한다.
+
+    load_krx_stocks()가 이미 받아온 응답 하나에 전 종목 종가가 들어 있으므로
+    추가 네트워크 요청이 없다. 내재가치는 저장된 값을 그대로 쓰고 안전마진만
+    다시 계산한다. 내재가치는 EPS·BPS에서 나오고 그것들은 분기마다 바뀌지만,
+    주가는 매일 바뀌기 때문이다.
+
+    :return: 주가가 갱신된 종목 수
+    """
+    if KRX_STOCKS is None or 'Close' not in KRX_STOCKS.columns:
+        print("⚠️ KRX 목록에 종가(Close)가 없어 주가 갱신을 건너뛴다", flush=True)
+        return 0
+
+    has_volume = 'Volume' in KRX_STOCKS.columns
+    updated = 0
+    stamp = current_time.isoformat()
+
+    for row in KRX_STOCKS.itertuples(index=False):
+        stock = results_dict.get(row.Code)
+        if stock is None:
+            continue
+
+        try:
+            price = float(row.Close)
+        except (TypeError, ValueError):
+            continue
+        if price <= 0:
+            continue
+
+        stock['current_price'] = price
+        stock['price_updated'] = stamp
+        if has_volume:
+            try:
+                stock['volume'] = int(row.Volume)
+            except (TypeError, ValueError):
+                stock['volume'] = None
+
+        iv = stock.get('intrinsic_value')
+        if iv is not None and not (isinstance(iv, float) and math.isnan(iv)):
+            stock['safety_margin'] = ((iv - price) / price) * 100
+
+        updated += 1
+
+    print(f"💰 주가 갱신: {updated}개 종목 (네트워크 요청 0회)", flush=True)
+    return updated
+
+
 def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
     각 종목별로 마지막 업데이트 시간을 저장하고,
-    STOCK_REFRESH_SECONDS가 지나지 않은 종목은 건너뜁니다.
+    FUNDAMENTALS_REFRESH_SECONDS가 지나지 않은 종목은 재무지표 크롤링을
+    건너뜁니다. 주가는 건너뛴 종목도 포함해 매번 갱신됩니다.
 
     time_budget_seconds를 주면 그 시간이 지난 시점에 루프를 중단하고
     거기까지의 결과를 저장/업로드합니다. 종목은 오래된 순으로 정렬되어
@@ -419,79 +523,100 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list
 
     kst = pytz.timezone("Asia/Seoul")
     current_time = datetime.now(kst)
-    # current_time = datetime.now()
+
+    # ── 1단계: 주가 갱신 (네트워크 요청 0회) ──────────────
+    # 이미 받아둔 KRX 목록에 전 종목 종가가 들어 있다. 매일 바뀌는 건
+    # 주가뿐이므로 전 종목을 여기서 한 번에 최신화한다.
+    price_updated = refresh_prices(results_dict, current_time)
+
+    # ── 2단계: 재무지표 크롤링 (느림, 나눠서 진행) ────────
+    # EPS·BPS는 분기마다 바뀌므로 FUNDAMENTALS_REFRESH_SECONDS 주기로만
+    # 다시 긁는다. 오래된 종목부터 처리하므로 중단돼도 다음 실행이 이어받는다.
+    to_crawl = []
     skipped_count = 0
+    for code, name in stock_list:
+        existing_stock = results_dict.get(code)
+        if existing_stock and 'last_updated' in existing_stock:
+            try:
+                last_updated = datetime.fromisoformat(existing_stock['last_updated'])
+                if (current_time - last_updated).total_seconds() < FUNDAMENTALS_REFRESH_SECONDS:
+                    skipped_count += 1
+                    continue
+            except ValueError:
+                pass  # 파싱 불가하면 다시 크롤링
+        to_crawl.append((code, name))
+
+    print(f"🔎 재무지표 크롤링 대상 {len(to_crawl)}개 "
+          f"(최신이라 건너뜀 {skipped_count}개), 동시 {CRAWL_WORKERS}개", flush=True)
+
+    reset_treasury_circuit()
+
+    def _safe_analyze(item):
+        code, name = item
+        try:
+            return code, name, analyze_stock(code)
+        except Exception as e:
+            print(f"❗ 종목 {code} ({name}) 분석 중 오류: {type(e).__name__}", flush=True)
+            return code, name, None
+
     analyzed_count = 0
-    code_list = []
-
     budget_exhausted = False
-    for i, (code, name) in enumerate(stock_list):
-        # print(f"🔍 [{i+1}/{total_stocks}] {code} - {name} 처리 시작", flush=True)
 
+    # 묶음 단위로 처리한다. 묶음이 끝날 때마다 시간 예산을 확인하고 저장하므로
+    # 스레드 간 락 없이도 결과 병합이 안전하다.
+    for start in range(0, len(to_crawl), CRAWL_CHUNK):
         if time_budget_seconds is not None and (time.monotonic() - started_at) > time_budget_seconds:
             budget_exhausted = True
-            print(f"⏱️ 시간 예산 {time_budget_seconds}초 소진 → {analyzed_count}개 분석 후 중단", flush=True)
+            print(f"⏱️ 시간 예산 {time_budget_seconds}초 소진 → 재무지표 {analyzed_count}개 갱신 후 중단", flush=True)
             break
 
-        existing_stock = results_dict.get(code)
+        chunk = to_crawl[start:start + CRAWL_CHUNK]
+        with ThreadPoolExecutor(max_workers=CRAWL_WORKERS) as pool:
+            outcomes = list(pool.map(_safe_analyze, chunk))
 
-        if existing_stock and 'last_updated' in existing_stock:
-            last_updated = datetime.fromisoformat(existing_stock['last_updated'])
-            if (current_time - last_updated).total_seconds() < STOCK_REFRESH_SECONDS:
-                skipped_count += 1
+        done_names = []
+        for code, name, result in outcomes:
+            if not result or result.get('error'):
                 continue
+            results_dict[code] = {
+                'code': code,
+                'name': result['stock_name'],
+                'current_price': result['current_price'],
+                'intrinsic_value': result['intrinsic_value'],
+                'safety_margin': result['safety_margin'],
+                'treasury_ratio': result['treasury_ratio'],
+                'dividend_yield': result['dividend_yield'],
+                'last_updated': current_time.isoformat(),
+                'price_updated': current_time.isoformat(),
+            }
+            analyzed_count += 1
+            done_names.append(result['stock_name'])
 
-        try:
-            result = analyze_stock(code)
-            # print(f"✅ 종목 {code} ({name}) 분석 완료", flush=True)
-            code_list.append(result['stock_name'])
-            # time.sleep(10)
+        # 묶음마다 로컬 저장 (디스크 I/O, 대역폭 없음)
+        results = sorted(results_dict.values(), key=margin_key, reverse=True)
+        with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False)
+        elapsed = int(time.monotonic() - started_at)
+        print(f"💾 [{min(start + CRAWL_CHUNK, len(to_crawl))}/{len(to_crawl)}] "
+              f"{elapsed}초 경과, 이번 묶음 {len(done_names)}개 성공", flush=True)
 
-            if not result.get('error'):
-                stock_data = {
-                    'code': code,
-                    'name': result['stock_name'],
-                    'current_price': result['current_price'],
-                    'intrinsic_value': result['intrinsic_value'],
-                    'safety_margin': result['safety_margin'],
-                    'treasury_ratio': result['treasury_ratio'],
-                    'dividend_yield': result['dividend_yield'],
-                    'last_updated': current_time.isoformat()
-                }
+        # 일정 개수마다 Supabase 체크포인트 (재시작 대비)
+        if analyzed_count and analyzed_count % SUPABASE_CHECKPOINT_EVERY < CRAWL_CHUNK:
+            upload_to_supabase(RESULTS_FILE, list(results_dict.values()))
 
-                results_dict[code] = stock_data
-                analyzed_count += 1
-
-                # 10종목 분석마다 로컬 저장 (디스크 I/O, 대역폭 없음)
-                if analyzed_count % 10 == 0:
-                    results = sorted(results_dict.values(), key=margin_key, reverse=True)
-                    with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
-                        json.dump(results, f, ensure_ascii=False)
-                    print(f"💾 {i + 1}/{total_stocks} 개 종목 분석 결과 저장, 종목: {code_list}", flush=True)
-                    code_list = []
-
-                # 500종목 분석마다 Supabase 체크포인트 업로드
-                # (재시작 대비용. 간격을 넓혀 아웃바운드 대역폭 절약)
-                if analyzed_count % SUPABASE_CHECKPOINT_EVERY == 0:
-                    upload_to_supabase(RESULTS_FILE, list(results_dict.values()))
-
-        except Exception as e:
-            print(f"❗ 종목 {code} ({name}) 분석 중 오류 발생: {e}", flush=True)
-            continue
-
-    # 최종 저장. 이번 사이클에 새로 분석한 종목이 없으면 업로드 생략
-    # (모든 종목이 최신이라 스킵된 경우 업로드해봐야 내용이 동일함)
+    # 최종 저장. 주가든 재무지표든 바뀐 게 있으면 업로드한다.
     results = sorted(results_dict.values(), key=margin_key, reverse=True)
-    if analyzed_count == 0:
-        print("⏩ 새로 분석된 종목 없음 → Supabase 업로드 생략", flush=True)
+    changed = analyzed_count > 0 or price_updated > 0
+    if not changed:
+        print("⏩ 변경된 내용 없음 → Supabase 업로드 생략", flush=True)
         save_results_data(results, upload=False)
     else:
         save_results_data(results)
 
     status = "중단(시간 예산)" if budget_exhausted else "완료"
-    print(f"\n✅ 분석 {status}: 신규 {analyzed_count}개 / 누적 {len(results)}개", flush=True)
-    print(f"⏩ 건너뛴 종목 수: {skipped_count}", flush=True)
-    print(f"📈 상위 {limit}개 종목 반환", flush=True)
+    print(f"\n✅ 분석 {status}: 주가 {price_updated}개 / 재무지표 신규 {analyzed_count}개 "
+          f"/ 누적 {len(results)}개", flush=True)
+    print(f"⏩ 재무지표가 최신이라 건너뛴 종목: {skipped_count}", flush=True)
 
     return results[:limit]
 
@@ -547,7 +672,7 @@ def get_dart_financial(corp_code: str, bsns_year: int, reprt_code: str = '11011'
                 'bsns_year': str(bsns_year),
                 'reprt_code': reprt_code
             },
-            timeout=30
+            timeout=REQUEST_TIMEOUT
         )
         data = resp.json()
         if data.get('status') == '000':

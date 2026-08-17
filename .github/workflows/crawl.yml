@@ -60,5 +60,7 @@ jobs:
           # 다음 실행이 남은 종목부터 이어받는다.
           CRAWL_BUDGET_SECONDS: '2700'
           NCAV_BUDGET_SECONDS: '900'
-          STOCK_REFRESH_SECONDS: '3600'
+          # EPS·BPS는 분기 데이터라 매일 긁을 이유가 없다.
+          FUNDAMENTALS_REFRESH_SECONDS: '604800'
+          CRAWL_WORKERS: '6'
         run: python crawl.py

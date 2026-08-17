@@ -12,7 +12,8 @@
   DART_API_KEY                 없으면 NCAV 스크리닝을 건너뛴다
   CRAWL_BUDGET_SECONDS         안전마진 분석 시간 상한 (기본 3600)
   NCAV_BUDGET_SECONDS          NCAV 스크리닝 시간 상한 (기본 1800)
-  STOCK_REFRESH_SECONDS        종목 재분석 주기 (기본 3600)
+  FUNDAMENTALS_REFRESH_SECONDS 재무지표 재크롤링 주기 (기본 7일)
+  CRAWL_WORKERS                네이버 동시 요청 수 (기본 6)
 
 로컬 실행:
   python crawl.py
