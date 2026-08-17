@@ -1,0 +1,11 @@
+# 크롤러(crawl.py) 의존성. GitHub Actions에서 설치한다.
+# 웹앱에는 필요 없는 것들이라 requirements.txt와 분리했다.
+requests>=2.26.0
+lxml>=4.9.1
+pandas>=1.5.3
+numpy>=1.24.3
+finance-datareader>=0.9.110
+tqdm>=4.65.0
+pytz>=2023.3
+supabase>=1.0.3
+python-dotenv>=1.0.0

@@ -13,67 +13,14 @@ import math
 
 import time
 import pytz
-from supabase import create_client, Client
 from dotenv import load_dotenv
+
+# Supabase 입출력은 storage 모듈로 분리되어 있다. 웹앱이 이 크롤러 모듈을
+# 임포트하지 않고도 결과를 내려받을 수 있게 하기 위함이다.
+from storage import upload_to_supabase, download_from_supabase
 
 # 환경 변수 로드
 load_dotenv()
-
-# Supabase 설정
-SUPABASE_URL = os.getenv('SUPABASE_URL')
-SUPABASE_KEY = os.getenv('SUPABASE_KEY')
-SUPABASE_BUCKET = 'stock-data'  # Storage 버킷 이름
-
-supabase: Client = None
-
-def get_supabase_client():
-    """Supabase 클라이언트 반환 (싱글톤)"""
-    global supabase
-    if supabase is None and SUPABASE_URL and SUPABASE_KEY:
-        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
-    return supabase
-
-def upload_to_supabase(file_name: str, data: list) -> bool:
-    """JSON 데이터를 Supabase Storage에 업로드"""
-    try:
-        client = get_supabase_client()
-        if client is None:
-            print("Supabase 클라이언트 없음, 로컬 저장만 수행")
-            return False
-
-        json_bytes = json.dumps(data, ensure_ascii=False).encode('utf-8')
-
-        # 기존 파일 삭제 후 업로드 (upsert)
-        try:
-            client.storage.from_(SUPABASE_BUCKET).remove([file_name])
-        except:
-            pass  # 파일이 없으면 무시
-
-        result = client.storage.from_(SUPABASE_BUCKET).upload(
-            file_name,
-            json_bytes,
-            file_options={"content-type": "application/json"}
-        )
-        print(f"✅ Supabase Storage 업로드 완료: {file_name}")
-        return True
-    except Exception as e:
-        print(f"❌ Supabase Storage 업로드 실패: {e}")
-        return False
-
-def download_from_supabase(file_name: str) -> list:
-    """Supabase Storage에서 JSON 데이터 다운로드"""
-    try:
-        client = get_supabase_client()
-        if client is None:
-            return None
-
-        response = client.storage.from_(SUPABASE_BUCKET).download(file_name)
-        data = json.loads(response.decode('utf-8'))
-        print(f"✅ Supabase Storage에서 다운로드 완료: {file_name} ({len(data)}개 항목)")
-        return data
-    except Exception as e:
-        print(f"⚠️ Supabase Storage 다운로드 실패: {e}")
-        return None
 
 # DART OpenAPI 설정
 DART_API_KEY = os.getenv('DART_API_KEY')

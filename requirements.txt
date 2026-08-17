@@ -1,13 +1,10 @@
+# 웹앱(app.py) 의존성. 호스팅 서비스가 자동 감지하는 파일이다.
+# 크롤링에만 필요한 requests/lxml/FinanceDataReader/tqdm은 여기 없다.
+# 크롤러를 돌리려면 requirements-crawl.txt 를 설치할 것.
 Flask>=2.0.1
 Werkzeug>=2.0.3
-requests>=2.26.0
-lxml>=4.9.1
-numpy>=1.24.3
-pandas>=1.5.3
-finance-datareader>=0.9.110
-tqdm>=4.65.0
 gunicorn>=20.1.0
+pandas>=1.5.3
 xlsxwriter>=3.1.0
 supabase>=1.0.3
 python-dotenv>=1.0.0
-pytz>=2023.3

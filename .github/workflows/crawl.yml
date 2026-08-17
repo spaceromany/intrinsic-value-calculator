@@ -40,11 +40,15 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
+          # 기본값은 requirements.txt(웹앱용)를 해싱한다. 크롤러가 설치하는
+          # 파일을 기준으로 캐시해야 웹앱 의존성만 바뀌었을 때 캐시가
+          # 헛되이 무효화되지 않는다.
+          cache-dependency-path: requirements-crawl.txt
 
       - name: 의존성 설치
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-crawl.txt
 
       - name: 크롤링 실행
         env:

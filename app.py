@@ -1,5 +1,8 @@
 from flask import Flask, render_template, request, jsonify, send_file
-from safety_margin_calc_naver import download_from_supabase
+# 크롤러 모듈(safety_margin_calc_naver)이 아니라 storage에서 가져온다.
+# 크롤러 모듈은 requests·lxml·FinanceDataReader·tqdm을 최상단에서 임포트하는데,
+# 웹앱은 그중 무엇도 쓰지 않는다.
+from storage import download_from_supabase
 from datetime import datetime
 import os
 import threading

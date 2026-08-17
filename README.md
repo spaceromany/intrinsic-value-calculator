@@ -14,7 +14,8 @@
 
 1. 필요한 패키지 설치:
 ```bash
-pip install -r requirements.txt
+pip install -r requirements.txt          # 웹앱만 실행할 때
+pip install -r requirements-crawl.txt    # 크롤러도 돌릴 때 추가
 ```
 
 2. 애플리케이션 실행:
@@ -44,6 +45,20 @@ http://localhost:7777
 [웹앱] app.py — 결과를 메모리에 캐싱해 서빙
 ```
 
+파일 구성:
+
+| 파일 | 역할 | 의존성 |
+|---|---|---|
+| `app.py` | 웹 서빙 전용. 크롤링하지 않음 | `requirements.txt` |
+| `crawl.py` | 배치 크롤러 진입점 | `requirements-crawl.txt` |
+| `safety_margin_calc_naver.py` | 크롤링·계산 로직 | 〃 |
+| `storage.py` | Supabase 입출력. 양쪽이 공유 | supabase, python-dotenv |
+
+`storage.py`가 따로 있는 이유는 웹앱 때문입니다. 이 함수들이 크롤러 모듈
+안에 있으면 웹앱이 `download_from_supabase` 하나를 쓰려고
+requests·lxml·FinanceDataReader·tqdm까지 전부 임포트하게 됩니다.
+분리 후 웹앱의 모듈 임포트 시간이 2.42초에서 1.30초로 줄었습니다.
+
 웹앱은 크롤링하지 않습니다. 한 프로세스에 묶여 있을 때는 백그라운드
 크롤링이 웹 호스트의 아웃바운드 대역폭을 월 수십 GB씩 소모했습니다.
 분리 후 웹앱의 트래픽은 실제 사용자 요청과 시간당 1회의 캐시 갱신뿐입니다.
@@ -59,7 +74,9 @@ python crawl.py
 | 변수 | 대상 | 설명 |
 |---|---|---|
 | `SUPABASE_URL` | 크롤러 + 웹앱 | Supabase 프로젝트 URL |
-| `SUPABASE_KEY` | 크롤러 + 웹앱 | Supabase API 키 |
+| `SUPABASE_KEY` | 크롤러 + 웹앱 | Supabase anon 키. 웹앱은 읽기만 하므로 이걸로 충분 |
+| `SUPABASE_SERVICE_KEY` | 크롤러 | 있으면 `SUPABASE_KEY`보다 우선 사용. 쓰기 권한이 필요한 크롤러용이며, 브라우저에 절대 노출하지 말 것 |
+| `SUPABASE_BUCKET` | 크롤러 + 웹앱 | 버킷 이름. 기본 `stock-data` |
 | `DART_API_KEY` | 크롤러 | 없으면 NCAV 스크리닝을 건너뜀 |
 | `CACHE_TTL` | 웹앱 | 캐시 수명(초). 기본 3600 |
 | `CRAWL_BUDGET_SECONDS` | 크롤러 | 안전마진 분석 시간 상한. 기본 3600 |
