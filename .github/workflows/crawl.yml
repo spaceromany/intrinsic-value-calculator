@@ -23,6 +23,13 @@ permissions:
 jobs:
   crawl:
     runs-on: ubuntu-latest
+
+    # 시크릿이 저장소 레벨이 아니라 이 환경 안에 등록되어 있다.
+    # 환경 시크릿은 job이 environment를 선언해야만 주입되므로 이 줄이 없으면
+    # secrets.SUPABASE_URL 등이 전부 빈 값이 된다.
+    # (DART_API_KEY는 여기서 시크릿 이름이 아니라 '환경'의 이름이다)
+    environment: DART_API_KEY
+
     # 시간 예산(2700+900초)보다 넉넉히 잡되, 폭주 시 과금을 막는 상한
     timeout-minutes: 90
 
