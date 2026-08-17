@@ -436,6 +436,27 @@ def save_results_data(results: list, upload: bool = True):
     if upload:
         upload_to_supabase(RESULTS_FILE, results)
 
+def get_latest_trading_date() -> str:
+    """KRX 종가 데이터가 실제로 어느 거래일 것인지 반환한다 ('YYYY-MM-DD').
+
+    StockListing은 '최신 종가'를 줄 뿐 그게 어느 날짜인지 알려주지 않는다.
+    휴장일이나 장 마감 전에 실행하면 직전 거래일 종가가 오는데, 가져온 시각을
+    그대로 기준일로 표시하면 사용자에게 오늘 시세인 것처럼 보인다.
+    (실제로 2026-08-17 광복절 대체공휴일에 이 혼동이 발생했다.)
+
+    KOSPI 지수의 마지막 인덱스를 거래일로 삼는다. 실패하면 None을 반환하고
+    호출부는 기준일 표시를 생략한다.
+    """
+    try:
+        start = (datetime.now() - timedelta(days=21)).strftime('%Y-%m-%d')
+        idx = fdr.DataReader('KS11', start).index
+        if len(idx):
+            return str(idx[-1].date())
+    except Exception as e:
+        print(f"⚠️ 거래일 확인 실패: {type(e).__name__}", flush=True)
+    return None
+
+
 def prune_delisted(results_dict: dict, krx_codes: set) -> int:
     """KRX 목록에 없는 종목을 결과에서 제거한다.
 
@@ -491,6 +512,10 @@ def refresh_prices(results_dict: dict, current_time) -> int:
     updated = 0
     stamp = current_time.isoformat()
 
+    # 종가가 실제로 어느 거래일 것인지. 휴장일에 돌면 직전 거래일이 나온다.
+    trading_date = get_latest_trading_date()
+    print(f"📅 종가 기준일: {trading_date or '확인 실패'}", flush=True)
+
     for row in KRX_STOCKS.itertuples(index=False):
         stock = results_dict.get(row.Code)
         if stock is None:
@@ -504,7 +529,9 @@ def refresh_prices(results_dict: dict, current_time) -> int:
             continue
 
         stock['current_price'] = price
-        stock['price_updated'] = stamp
+        stock['price_updated'] = stamp      # 가져온 시각
+        if trading_date:
+            stock['price_date'] = trading_date   # 그 주가가 속한 거래일
         if has_volume:
             try:
                 stock['volume'] = int(row.Volume)

@@ -100,12 +100,19 @@ _ncav_cache = RemoteDataCache(NCAV_FILE)
 
 
 def _latest_timestamp(data):
-    """가장 최근 데이터 갱신 시각을 표시용 문자열로 반환.
+    """표시할 데이터 기준 시점을 문자열로 반환.
 
-    price_updated(주가)를 우선한다. 재무지표(last_updated)는 분기 데이터라
-    최대 7일 주기로 갱신되는데, 그 값을 표시하면 주가가 당일치인데도
-    "일주일 전"으로 보인다. 사용자가 이 시각으로 판단하는 건 주가 신선도다.
+    price_date(주가가 속한 거래일)를 최우선으로 쓴다. 가져온 시각을 쓰면
+    휴장일에 "오늘 15:54 갱신"으로 보이지만 실제 주가는 직전 거래일 종가다.
+    사용자가 알아야 하는 건 언제 받아왔는지가 아니라 언제 시세인지다.
+
+    재무지표(last_updated)는 분기 데이터라 최대 7일 주기로만 갱신되므로
+    신선도 표시에 쓰면 주가가 최신인데도 오래된 것처럼 보인다.
     """
+    dates = [s.get('price_date') for s in data if s.get('price_date')]
+    if dates:
+        return f"{max(dates)} 종가"
+
     stamps = [s.get('price_updated') or s.get('last_updated') for s in data]
     stamps = [s for s in stamps if s]
     if not stamps:
@@ -405,7 +412,8 @@ def get_watchlist_data():
                     'safety_margin': stock['safety_margin'],
                     'treasury_ratio': stock.get('treasury_ratio', None),
                     'dividend_yield': stock.get('dividend_yield', None),
-                    'last_update': stock.get('last_updated', None)
+                    'last_update': stock.get('last_updated', None),
+                    'price_date': stock.get('price_date', None)
                 }
                 stocks.append(stock_data)
                 
