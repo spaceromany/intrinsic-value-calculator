@@ -23,8 +23,16 @@ load_dotenv()
 SUPABASE_URL = os.getenv('SUPABASE_URL')
 # 크롤러는 쓰기 권한이 필요하므로 service_role 키를 우선 사용한다.
 # 웹앱은 읽기만 하므로 anon 키(SUPABASE_KEY)로 충분하다.
+USING_SERVICE_KEY = bool(os.getenv('SUPABASE_SERVICE_KEY'))
 SUPABASE_KEY = os.getenv('SUPABASE_SERVICE_KEY') or os.getenv('SUPABASE_KEY')
 SUPABASE_BUCKET = os.getenv('SUPABASE_BUCKET', 'stock-data')
+
+
+def key_kind() -> str:
+    """어느 키로 동작 중인지. 키 값 자체는 절대 로그에 남기지 않는다."""
+    if not SUPABASE_KEY:
+        return '없음'
+    return 'service_role' if USING_SERVICE_KEY else 'anon(폴백)'
 
 supabase: Client = None
 

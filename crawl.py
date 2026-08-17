@@ -56,6 +56,12 @@ def main() -> int:
         _log("   결과를 올릴 곳이 없으므로 크롤링하지 않고 종료한다.")
         return 1
 
+    # 어느 키로 업로드하는지 남긴다. service_role 시크릿을 등록해도 워크플로에
+    # env 매핑을 빠뜨리면 조용히 anon 키로 폴백하므로, 로그가 없으면
+    # 전환이 됐는지 확인할 방법이 없다.
+    from storage import key_kind
+    _log(f"Supabase 키: {key_kind()}")
+
     crawl_budget = int(os.getenv('CRAWL_BUDGET_SECONDS', '3600'))
     ncav_budget = int(os.getenv('NCAV_BUDGET_SECONDS', '1800'))
 

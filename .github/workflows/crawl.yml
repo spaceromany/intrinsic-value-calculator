@@ -53,6 +53,11 @@ jobs:
       - name: 크롤링 실행
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          # 크롤러는 Storage에 쓰기를 하므로 service_role 키를 쓴다.
+          # storage.py가 SERVICE_KEY를 우선 사용하고, 없으면 anon 키로 폴백한다.
+          # 이 매핑이 없으면 저장소 시크릿에 키가 있어도 프로세스에 전달되지
+          # 않아 조용히 anon 키로 동작한다.
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
           DART_API_KEY: ${{ secrets.DART_API_KEY }}
           # 실행당 소요 시간을 제한해 Actions 무료 분(private repo 월 2,000분)을
