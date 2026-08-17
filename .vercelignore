@@ -1,0 +1,21 @@
+# 웹앱 배포에 불필요한 것들. 번들 크기(250MB 제한)를 아끼고
+# 콜드 스타트를 줄인다.
+
+# 크롤러 — GitHub Actions에서만 돈다
+crawl.py
+safety_margin_calc_naver.py
+requirements-crawl.txt
+.github/
+
+# 크롤러가 쓰는 종목 목록 (200KB). 웹앱은 읽지 않는다
+krx_stocks.json
+
+# 레퍼런스 문서
+ref/
+README.md
+CLAUDE.md
+supabase/
+
+# 로컬 개발 환경
+.venv/
+venv/

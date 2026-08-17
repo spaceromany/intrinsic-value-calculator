@@ -63,6 +63,28 @@ requests·lxml·FinanceDataReader·tqdm까지 전부 임포트하게 됩니다.
 크롤링이 웹 호스트의 아웃바운드 대역폭을 월 수십 GB씩 소모했습니다.
 분리 후 웹앱의 트래픽은 실제 사용자 요청과 시간당 1회의 캐시 갱신뿐입니다.
 
+### 웹앱 배포 (Vercel)
+
+서울 리전(`icn1`)으로 고정되어 있습니다. 한국 사용자 기준 지연이 가장 낮습니다.
+
+1. vercel.com에서 GitHub 저장소를 import
+2. Settings → Environment Variables에 등록:
+   - `SUPABASE_URL`, `SUPABASE_KEY` — 결과를 읽기 위해 필요
+   - `SITE_URL` — 배포된 도메인 (예: `https://<프로젝트명>.vercel.app`).
+     설정하지 않으면 canonical과 sitemap이 옛 Render 주소를 가리킨다
+3. 이후 `main`에 push하면 자동 배포
+
+구조상 주의할 점:
+
+- `api/index.py`가 진입점이다. 실제 앱은 루트의 `app.py`에 그대로 두고
+  경로만 잡아준다. `app.py`를 `api/` 안으로 옮기면 Flask가 `templates/`를
+  찾지 못하고 `python app.py` 로컬 실행도 깨진다.
+- 서버리스라 유휴 상태 후 첫 요청에 콜드 스타트가 붙는다. `pandas`는
+  엑셀 내보내기에서만 쓰이므로 지연 임포트로 돌려 콜드 스타트 경로에서
+  제외했다 (약 1.5초 절감).
+- 함수 번들은 압축 해제 250MB 제한이 있다. `.vercelignore`로 크롤러
+  파일과 `krx_stocks.json`을 제외한다.
+
 ### 크롤러 수동 실행
 
 ```bash

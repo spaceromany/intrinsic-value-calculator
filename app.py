@@ -8,7 +8,6 @@ import os
 import threading
 import time
 import json
-import pandas as pd
 import math
 from io import BytesIO
 import random
@@ -298,6 +297,11 @@ def remove_from_watchlist():
 
 @app.route('/watchlist/export', methods=['POST'])
 def export_watchlist():
+    # pandas는 이 엔드포인트에서만 쓰인다. 최상단에서 임포트하면 모든 요청이
+    # 그 비용을 치르는데, 서버리스에서는 콜드 스타트마다 1초 안팎이 붙는다.
+    # 엑셀 내보내기는 드물게 쓰이므로 필요할 때만 로드한다.
+    import pandas as pd
+
     try:
         data = request.get_json()
         if not data:

@@ -1,0 +1,16 @@
+{
+  "regions": ["icn1"],
+  "functions": {
+    "api/index.py": {
+      "includeFiles": "{templates,static}/**",
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
+  ]
+}
