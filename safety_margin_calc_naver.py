@@ -72,6 +72,11 @@ MAX_PRUNE_RATIO = float(os.getenv('MAX_PRUNE_RATIO', '0.1'))
 # 사업보고서는 1년에 한 번(3월 말까지) 공시된다. 기존 24시간 주기는 1년에
 # 한 번 바뀌는 값을 365번 다시 받는 셈이었다.
 NCAV_REFRESH_SECONDS = int(os.getenv('NCAV_REFRESH_SECONDS', str(30 * 86400)))
+# NCAV를 구할 수 없는 종목의 재시도 주기 (초). 기본 7일.
+# 보험·은행 등은 재무상태표에 유동자산 구분이 없어 영구히 값이 나오지 않는다.
+# 실패를 기록하지 않으면 매 실행 재조회하게 되므로 마커를 남기되,
+# DART 장애로 인한 일시적 실패일 수도 있으므로 성공보다는 짧게 잡는다.
+NCAV_RETRY_SECONDS = int(os.getenv('NCAV_RETRY_SECONDS', str(7 * 86400)))
 # DART 동시 요청 수. 일일 호출 한도가 있으므로 과하게 올리지 않는다.
 NCAV_WORKERS = int(os.getenv('NCAV_WORKERS', '6'))
 NCAV_CHUNK = int(os.getenv('NCAV_CHUNK', '50'))
@@ -870,7 +875,9 @@ def calculate_ncav_screening(time_budget_seconds: int = None) -> list:
             if existing and 'last_updated' in existing:
                 try:
                     last_updated = datetime.fromisoformat(existing['last_updated'])
-                    if (current_time - last_updated).total_seconds() < NCAV_REFRESH_SECONDS:
+                    # 값을 못 구한 종목은 더 짧은 주기로만 재시도한다
+                    limit = NCAV_RETRY_SECONDS if existing.get('no_data') else NCAV_REFRESH_SECONDS
+                    if (current_time - last_updated).total_seconds() < limit:
                         continue
                 except ValueError:
                     pass  # 파싱 불가하면 다시 조회
@@ -887,6 +894,7 @@ def calculate_ncav_screening(time_budget_seconds: int = None) -> list:
 
     ncav_dict = dict(existing_ncav)
     analyzed = 0
+    no_data = 0
     print(f"   동시 {NCAV_WORKERS}개로 조회", flush=True)
 
     def _safe_financial(code):
@@ -910,6 +918,20 @@ def calculate_ncav_screening(time_budget_seconds: int = None) -> list:
 
         for code, fin in outcomes:
             if not fin:
+                # 값을 못 구한 종목도 기록해 둔다. 남기지 않으면 다음 실행에도
+                # '결과 없음' 상태라 영원히 재조회된다. 보험·은행처럼 재무상태표에
+                # 유동자산 구분이 없는 업종은 앞으로도 값이 나오지 않는다.
+                ncav_dict[code] = {
+                    'code': code,
+                    'name': marcap_dict[code]['name'],
+                    'ncav': None,
+                    'marcap': marcap_dict[code]['marcap'],
+                    'ncav_ratio': None,
+                    'ncav_positive': False,
+                    'no_data': True,
+                    'last_updated': current_time.isoformat(),
+                }
+                no_data += 1
                 continue
             marcap = marcap_dict[code]['marcap']
             ncav = fin['유동자산'] - fin['부채총계']
@@ -936,13 +958,13 @@ def calculate_ncav_screening(time_budget_seconds: int = None) -> list:
             json.dump(results, f, ensure_ascii=False)
         elapsed = int(time.monotonic() - started_at)
         print(f"💾 NCAV [{min(start + NCAV_CHUNK, len(targets))}/{len(targets)}] "
-              f"{elapsed}초 경과, 누적 {analyzed}개 분석", flush=True)
+              f"{elapsed}초 경과, 누적 분석 {analyzed}개 / 값없음 {no_data}개", flush=True)
 
     # 최종 저장. 실제로 분석된 종목이 있을 때만 Supabase에 업로드
     results = sorted(ncav_dict.values(), key=lambda x: x.get('ncav_ratio') or float('-inf'), reverse=True)
     with open(NCAV_RESULTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False)
-    if analyzed > 0:
+    if analyzed > 0 or no_data > 0:
         upload_to_supabase(NCAV_RESULTS_FILE, results)
     else:
         print("⏩ NCAV: 신규 분석 결과 없음 → Supabase 업로드 생략", flush=True)

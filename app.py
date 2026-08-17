@@ -431,6 +431,11 @@ def ncav_filter():
         if not data:
             return jsonify({'stocks': [], 'total': 0})
 
+        # NCAV를 구할 수 없는 종목은 목록에서 제외한다. 보험·은행처럼
+        # 재무상태표에 유동자산 구분이 없는 업종이며, 크롤러가 매 실행
+        # 재조회하지 않도록 마커만 남겨둔 항목이다.
+        data = [s for s in data if not s.get('no_data')]
+
         # 안전마진 결과에서 배당수익률 합치기
         margin_data, _ = get_results_data()
         if margin_data:
