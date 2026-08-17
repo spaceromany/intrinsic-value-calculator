@@ -61,6 +61,12 @@ TREASURY_FAILURE_LIMIT = int(os.getenv('TREASURY_FAILURE_LIMIT', '20'))
 _treasury_failures = 0
 _treasury_lock = threading.Lock()
 
+# 상장폐지 종목 정리의 안전장치.
+# KRX 응답이 일시적으로 불완전할 때 멀쩡한 종목을 지우면 복구에 며칠이
+# 걸리므로(재크롤링 필요), 목록이 수상하면 정리를 통째로 건너뛴다.
+MIN_KRX_SIZE_FOR_PRUNE = int(os.getenv('MIN_KRX_SIZE_FOR_PRUNE', '2000'))
+MAX_PRUNE_RATIO = float(os.getenv('MAX_PRUNE_RATIO', '0.1'))
+
 def load_krx_stocks(force: bool = False):
     """KRX 종목 목록을 파일에서 로드하거나 업데이트
 
@@ -430,6 +436,43 @@ def save_results_data(results: list, upload: bool = True):
     if upload:
         upload_to_supabase(RESULTS_FILE, results)
 
+def prune_delisted(results_dict: dict, krx_codes: set) -> int:
+    """KRX 목록에 없는 종목을 결과에서 제거한다.
+
+    상장폐지·종목코드 변경으로 목록에서 빠진 항목은 어느 경로로도 갱신되지
+    않는다. refresh_prices()는 KRX 목록을 훑으므로 건너뛰고, 크롤링 대상
+    목록에도 들어가지 않는다. 그대로 두면 마지막으로 성공한 시점의 주가가
+    영구히 박제되어, 거래할 수 없는 종목이 검색과 상위종목 목록에 남는다.
+
+    다만 KRX 응답이 일시적으로 불완전할 때 멀쩡한 종목을 지우면 복구에
+    재크롤링이 필요하므로, 목록이 수상하면 아무것도 지우지 않는다.
+
+    :return: 제거된 종목 수
+    """
+    if len(krx_codes) < MIN_KRX_SIZE_FOR_PRUNE:
+        print(f"⏩ KRX 목록이 {len(krx_codes)}개뿐이라 정리를 건너뛴다 "
+              f"(최소 {MIN_KRX_SIZE_FOR_PRUNE}개 필요)", flush=True)
+        return 0
+
+    orphans = [code for code in results_dict if code not in krx_codes]
+    if not orphans:
+        return 0
+
+    ratio = len(orphans) / len(results_dict)
+    if ratio > MAX_PRUNE_RATIO:
+        print(f"⚠️ 제거 대상이 {len(orphans)}개({ratio:.1%})로 과도하여 정리를 건너뛴다. "
+              f"KRX 목록이 온전한지 확인 필요", flush=True)
+        return 0
+
+    sample = ', '.join(f"{results_dict[c].get('name', c)}({c})" for c in orphans[:5])
+    for code in orphans:
+        del results_dict[code]
+
+    print(f"🧹 상장폐지 등으로 KRX 목록에 없는 {len(orphans)}개 제거: {sample}"
+          f"{' 외' if len(orphans) > 5 else ''}", flush=True)
+    return len(orphans)
+
+
 def refresh_prices(results_dict: dict, current_time) -> int:
     """KRX 목록의 종가로 전 종목 주가와 안전마진을 갱신한다.
 
@@ -524,6 +567,9 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list
     kst = pytz.timezone("Asia/Seoul")
     current_time = datetime.now(kst)
 
+    # ── 0단계: 상장폐지 종목 정리 ─────────────────────────
+    pruned = prune_delisted(results_dict, set(KRX_STOCKS['Code']))
+
     # ── 1단계: 주가 갱신 (네트워크 요청 0회) ──────────────
     # 이미 받아둔 KRX 목록에 전 종목 종가가 들어 있다. 매일 바뀌는 건
     # 주가뿐이므로 전 종목을 여기서 한 번에 최신화한다.
@@ -606,7 +652,7 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list
 
     # 최종 저장. 주가든 재무지표든 바뀐 게 있으면 업로드한다.
     results = sorted(results_dict.values(), key=margin_key, reverse=True)
-    changed = analyzed_count > 0 or price_updated > 0
+    changed = analyzed_count > 0 or price_updated > 0 or pruned > 0
     if not changed:
         print("⏩ 변경된 내용 없음 → Supabase 업로드 생략", flush=True)
         save_results_data(results, upload=False)
@@ -615,7 +661,7 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list
 
     status = "중단(시간 예산)" if budget_exhausted else "완료"
     print(f"\n✅ 분석 {status}: 주가 {price_updated}개 / 재무지표 신규 {analyzed_count}개 "
-          f"/ 누적 {len(results)}개", flush=True)
+          f"/ 정리 {pruned}개 / 누적 {len(results)}개", flush=True)
     print(f"⏩ 재무지표가 최신이라 건너뛴 종목: {skipped_count}", flush=True)
 
     return results[:limit]
