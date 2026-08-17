@@ -25,6 +25,14 @@ from datetime import datetime
 
 import pytz
 
+# encoding: Windows 콘솔(cp949)에서 로그의 이모지가 UnicodeEncodeError를
+#   일으켜 크롤링이 중단되는 것을 막는다. CI(Linux)는 이미 UTF-8이라 무해하다.
+# line_buffering: 버퍼에 갇힌 로그가 유실되지 않게 한다. 장시간 도는
+#   작업이라 진행 상황이 실시간으로 보여야 한다.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
+
 from safety_margin_calc_naver import (
     load_krx_stocks,
     analyze_all_stocks,

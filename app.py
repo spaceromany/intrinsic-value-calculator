@@ -9,6 +9,18 @@ import pandas as pd
 import math
 from io import BytesIO
 import random
+import sys
+
+# 표준 출력 설정 두 가지를 고정한다.
+# 1) encoding: Windows 콘솔 기본값(cp949)은 로그의 이모지를 표현하지 못해
+#    UnicodeEncodeError를 던진다. 이 예외가 요청 처리 중에 터지면 응답이
+#    500이 된다(Supabase 실패 로그를 찍다가 응답 자체가 죽는다).
+# 2) line_buffering: 출력이 파이프로 갈 때 파이썬은 블록 버퍼링을 하므로
+#    프로세스가 죽으면 로그가 통째로 유실된다. 배포 환경에서 장애를
+#    진단하려면 줄 단위로 즉시 나가야 한다.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8', errors='replace', line_buffering=True)
 
 # ── 데이터 로딩 (읽기 전용) ──────────────────────────
 # 크롤링은 이 프로세스에서 하지 않는다. crawl.py가 스케줄러(GitHub Actions)에서
