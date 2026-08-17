@@ -106,6 +106,8 @@ python crawl.py
 | `NCAV_BUDGET_SECONDS` | 크롤러 | NCAV 스크리닝 시간 상한. 기본 1800 |
 | `FUNDAMENTALS_REFRESH_SECONDS` | 크롤러 | 재무지표(EPS·BPS·자사주) 재크롤링 주기. 기본 7일. 주가는 이 값과 무관하게 매 실행 갱신된다 |
 | `CRAWL_WORKERS` | 크롤러 | 네이버 동시 요청 수. 기본 6. 올리면 빨라지지만 차단 위험 |
+| `NCAV_REFRESH_SECONDS` | 크롤러 | NCAV 재조회 주기. 기본 30일. DART 사업보고서는 연 1회 공시라 더 자주 받을 이유가 없다 |
+| `NCAV_WORKERS` | 크롤러 | DART 동시 요청 수. 기본 6 |
 
 크롤러용 값은 GitHub 저장소의 Settings → Secrets and variables → Actions에
 등록합니다. 시간 상한을 두는 이유는 Actions 실행이 무료 분을 초과하거나

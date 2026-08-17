@@ -67,6 +67,15 @@ _treasury_lock = threading.Lock()
 MIN_KRX_SIZE_FOR_PRUNE = int(os.getenv('MIN_KRX_SIZE_FOR_PRUNE', '2000'))
 MAX_PRUNE_RATIO = float(os.getenv('MAX_PRUNE_RATIO', '0.1'))
 
+# NCAV 재조회 주기 (초). 기본 30일.
+# NCAV는 DART 사업보고서(reprt_code=11011)의 유동자산·부채총계에서 나오고,
+# 사업보고서는 1년에 한 번(3월 말까지) 공시된다. 기존 24시간 주기는 1년에
+# 한 번 바뀌는 값을 365번 다시 받는 셈이었다.
+NCAV_REFRESH_SECONDS = int(os.getenv('NCAV_REFRESH_SECONDS', str(30 * 86400)))
+# DART 동시 요청 수. 일일 호출 한도가 있으므로 과하게 올리지 않는다.
+NCAV_WORKERS = int(os.getenv('NCAV_WORKERS', '6'))
+NCAV_CHUNK = int(os.getenv('NCAV_CHUNK', '50'))
+
 def load_krx_stocks(force: bool = False):
     """KRX 종목 목록을 파일에서 로드하거나 업데이트
 
@@ -859,34 +868,49 @@ def calculate_ncav_screening(time_budget_seconds: int = None) -> list:
         if code in corp_map:
             existing = existing_ncav.get(code)
             if existing and 'last_updated' in existing:
-                last_updated = datetime.fromisoformat(existing['last_updated'])
-                if (current_time - last_updated).total_seconds() < 86400:  # 24시간
-                    continue
+                try:
+                    last_updated = datetime.fromisoformat(existing['last_updated'])
+                    if (current_time - last_updated).total_seconds() < NCAV_REFRESH_SECONDS:
+                        continue
+                except ValueError:
+                    pass  # 파싱 불가하면 다시 조회
             codes_to_analyze.append(code)
 
     total = len(codes_to_analyze)
     print(f"\n📊 NCAV 스크리닝 시작: {total}개 종목 분석 예정 (기존 {len(existing_ncav)}개)", flush=True)
 
     # 분석할 종목이 없으면 즉시 종료. 기존 결과를 다시 저장/업로드하지 않는다
-    # (24시간 스킵 때문에 대부분의 사이클이 여기에 해당)
+    # (사업보고서는 연 1회 공시라 대부분의 실행이 여기에 해당한다)
     if total == 0:
         print("⏩ NCAV: 갱신 대상 없음 → 저장/업로드 생략", flush=True)
         return existing_list or []
 
     ncav_dict = dict(existing_ncav)
     analyzed = 0
+    print(f"   동시 {NCAV_WORKERS}개로 조회", flush=True)
 
-    for i, code in enumerate(codes_to_analyze):
+    def _safe_financial(code):
+        try:
+            return code, get_latest_financial(corp_map[code])
+        except Exception as e:
+            print(f"❗ NCAV {code} 조회 오류: {type(e).__name__}", flush=True)
+            return code, None
+
+    targets = [c for c in codes_to_analyze if corp_map.get(c)]
+
+    # 묶음 단위로 처리해 묶음마다 예산을 확인하고 중간 저장한다.
+    for start in range(0, len(targets), NCAV_CHUNK):
         if time_budget_seconds is not None and (time.monotonic() - started_at) > time_budget_seconds:
             print(f"⏱️ NCAV 시간 예산 {time_budget_seconds}초 소진 → {analyzed}개 분석 후 중단", flush=True)
             break
 
-        corp_code = corp_map.get(code)
-        if not corp_code:
-            continue
+        chunk = targets[start:start + NCAV_CHUNK]
+        with ThreadPoolExecutor(max_workers=NCAV_WORKERS) as pool:
+            outcomes = list(pool.map(_safe_financial, chunk))
 
-        fin = get_latest_financial(corp_code)
-        if fin:
+        for code, fin in outcomes:
+            if not fin:
+                continue
             marcap = marcap_dict[code]['marcap']
             ncav = fin['유동자산'] - fin['부채총계']
 
@@ -906,12 +930,13 @@ def calculate_ncav_screening(time_budget_seconds: int = None) -> list:
             }
             analyzed += 1
 
-        # 50개마다 중간 저장
-        if (i + 1) % 50 == 0:
-            results = sorted(ncav_dict.values(), key=lambda x: x.get('ncav_ratio') or float('-inf'), reverse=True)
-            with open(NCAV_RESULTS_FILE, 'w', encoding='utf-8') as f:
-                json.dump(results, f, ensure_ascii=False)
-            print(f"💾 NCAV [{i+1}/{total}] 중간 저장 ({analyzed}개 분석 완료)", flush=True)
+        # 묶음마다 중간 저장 (로컬 디스크, 대역폭 없음)
+        results = sorted(ncav_dict.values(), key=lambda x: x.get('ncav_ratio') or float('-inf'), reverse=True)
+        with open(NCAV_RESULTS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(results, f, ensure_ascii=False)
+        elapsed = int(time.monotonic() - started_at)
+        print(f"💾 NCAV [{min(start + NCAV_CHUNK, len(targets))}/{len(targets)}] "
+              f"{elapsed}초 경과, 누적 {analyzed}개 분석", flush=True)
 
     # 최종 저장. 실제로 분석된 종목이 있을 때만 Supabase에 업로드
     results = sorted(ncav_dict.values(), key=lambda x: x.get('ncav_ratio') or float('-inf'), reverse=True)

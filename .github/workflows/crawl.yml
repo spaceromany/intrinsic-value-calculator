@@ -63,4 +63,7 @@ jobs:
           # EPS·BPS는 분기 데이터라 매일 긁을 이유가 없다.
           FUNDAMENTALS_REFRESH_SECONDS: '604800'
           CRAWL_WORKERS: '6'
+          # NCAV는 DART 사업보고서 기반이라 연 1회만 바뀐다.
+          NCAV_REFRESH_SECONDS: '2592000'
+          NCAV_WORKERS: '6'
         run: python crawl.py
