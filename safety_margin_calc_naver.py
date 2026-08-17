@@ -85,8 +85,20 @@ KRX_STOCKS_FILE = 'krx_stocks.json'
 RESULTS_FILE = 'all_safety_margin_results.json'
 KRX_STOCKS = None
 
-def load_krx_stocks():
-    """KRX 종목 목록을 파일에서 로드하거나 업데이트"""
+# 크롤링 중 Supabase 체크포인트 업로드 간격 (분석한 종목 수 기준).
+# 값을 키울수록 아웃바운드 대역폭을 아끼고, 재시작 시 잃는 작업량이 늘어난다.
+SUPABASE_CHECKPOINT_EVERY = int(os.getenv('SUPABASE_CHECKPOINT_EVERY', '500'))
+
+# 종목별 재분석 주기 (초). 기본 1시간
+STOCK_REFRESH_SECONDS = int(os.getenv('STOCK_REFRESH_SECONDS', '3600'))
+
+def load_krx_stocks(force: bool = False):
+    """KRX 종목 목록을 파일에서 로드하거나 업데이트
+
+    force=True 이면 파일 수정 시각과 무관하게 새로 내려받는다.
+    CI에서는 체크아웃 직후 파일 mtime이 항상 '방금'이라 mtime 기반 판단이
+    무의미하므로, 스케줄러에서 실행할 때는 force를 켜야 목록이 갱신된다.
+    """
     global KRX_STOCKS
 
     # 먼저 기존 파일이 있으면 로드
@@ -100,7 +112,7 @@ def load_krx_stocks():
             print(f"KRX 종목 목록 파일 로드 중 오류 발생: {e}")
 
     # 파일의 수정 시간 확인하여 하루가 지났으면 업데이트 시도
-    if os.path.exists(KRX_STOCKS_FILE):
+    if not force and os.path.exists(KRX_STOCKS_FILE):
         file_time = datetime.fromtimestamp(os.path.getmtime(KRX_STOCKS_FILE))
         now = datetime.now()
 
@@ -399,8 +411,12 @@ def load_results_data() -> list:
 
     return []
 
-def save_results_data(results: list):
-    """결과 데이터를 로컬과 Supabase Storage에 저장"""
+def save_results_data(results: list, upload: bool = True):
+    """결과 데이터를 로컬과 Supabase Storage에 저장
+
+    upload=False 이면 로컬 저장만 수행합니다. 변경된 내용이 없을 때
+    불필요한 업로드로 아웃바운드 대역폭을 소모하지 않기 위함입니다.
+    """
     # 로컬 저장
     try:
         with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
@@ -409,14 +425,20 @@ def save_results_data(results: list):
         print(f"⚠️ 로컬 저장 실패: {e}")
 
     # Supabase Storage 업로드
-    upload_to_supabase(RESULTS_FILE, results)
+    if upload:
+        upload_to_supabase(RESULTS_FILE, results)
 
-def analyze_all_stocks(limit: int = 30) -> list:
+def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
     각 종목별로 마지막 업데이트 시간을 저장하고,
-    1시간이 지나지 않은 종목은 건너뜁니다.
+    STOCK_REFRESH_SECONDS가 지나지 않은 종목은 건너뜁니다.
+
+    time_budget_seconds를 주면 그 시간이 지난 시점에 루프를 중단하고
+    거기까지의 결과를 저장/업로드합니다. 종목은 오래된 순으로 정렬되어
+    처리되므로, 중단되더라도 다음 실행이 남은 종목부터 이어서 갱신합니다.
     """
+    started_at = time.monotonic()
 
     if KRX_STOCKS is None:
         print("❗ KRX_STOCKS is None. 데이터 없음", flush=True)
@@ -452,16 +474,23 @@ def analyze_all_stocks(limit: int = 30) -> list:
     current_time = datetime.now(kst)
     # current_time = datetime.now()
     skipped_count = 0
+    analyzed_count = 0
     code_list = []
 
+    budget_exhausted = False
     for i, (code, name) in enumerate(stock_list):
         # print(f"🔍 [{i+1}/{total_stocks}] {code} - {name} 처리 시작", flush=True)
+
+        if time_budget_seconds is not None and (time.monotonic() - started_at) > time_budget_seconds:
+            budget_exhausted = True
+            print(f"⏱️ 시간 예산 {time_budget_seconds}초 소진 → {analyzed_count}개 분석 후 중단", flush=True)
+            break
 
         existing_stock = results_dict.get(code)
 
         if existing_stock and 'last_updated' in existing_stock:
             last_updated = datetime.fromisoformat(existing_stock['last_updated'])
-            if (current_time - last_updated).total_seconds() < 3600:
+            if (current_time - last_updated).total_seconds() < STOCK_REFRESH_SECONDS:
                 skipped_count += 1
                 continue
 
@@ -484,28 +513,36 @@ def analyze_all_stocks(limit: int = 30) -> list:
                 }
 
                 results_dict[code] = stock_data
+                analyzed_count += 1
 
-                # 10개마다 로컬 저장
-                if (i + 1) % 10 == 0:
+                # 10종목 분석마다 로컬 저장 (디스크 I/O, 대역폭 없음)
+                if analyzed_count % 10 == 0:
                     results = sorted(results_dict.values(), key=margin_key, reverse=True)
                     with open(RESULTS_FILE, 'w', encoding='utf-8') as f:
                         json.dump(results, f, ensure_ascii=False)
                     print(f"💾 {i + 1}/{total_stocks} 개 종목 분석 결과 저장, 종목: {code_list}", flush=True)
                     code_list = []
 
-                # 100개마다 Supabase 업로드
-                if (i + 1) % 100 == 0:
+                # 500종목 분석마다 Supabase 체크포인트 업로드
+                # (재시작 대비용. 간격을 넓혀 아웃바운드 대역폭 절약)
+                if analyzed_count % SUPABASE_CHECKPOINT_EVERY == 0:
                     upload_to_supabase(RESULTS_FILE, list(results_dict.values()))
 
         except Exception as e:
             print(f"❗ 종목 {code} ({name}) 분석 중 오류 발생: {e}", flush=True)
             continue
 
-    # 최종 저장 (로컬 + Supabase)
+    # 최종 저장. 이번 사이클에 새로 분석한 종목이 없으면 업로드 생략
+    # (모든 종목이 최신이라 스킵된 경우 업로드해봐야 내용이 동일함)
     results = sorted(results_dict.values(), key=margin_key, reverse=True)
-    save_results_data(results)
+    if analyzed_count == 0:
+        print("⏩ 새로 분석된 종목 없음 → Supabase 업로드 생략", flush=True)
+        save_results_data(results, upload=False)
+    else:
+        save_results_data(results)
 
-    print(f"\n✅ 분석 완료: {len(results)}개 종목 분석 성공", flush=True)
+    status = "중단(시간 예산)" if budget_exhausted else "완료"
+    print(f"\n✅ 분석 {status}: 신규 {analyzed_count}개 / 누적 {len(results)}개", flush=True)
     print(f"⏩ 건너뛴 종목 수: {skipped_count}", flush=True)
     print(f"📈 상위 {limit}개 종목 반환", flush=True)
 
@@ -619,12 +656,16 @@ def get_latest_financial(corp_code: str) -> dict:
     return None
 
 
-def calculate_ncav_screening() -> list:
+def calculate_ncav_screening(time_budget_seconds: int = None) -> list:
     """
     전체 KRX 종목에 대해 NCAV 스크리닝을 수행합니다.
     NCAV = 유동자산 - 부채총계
     NCAV > 시가총액 인 종목을 필터링합니다.
+
+    time_budget_seconds를 주면 그 시간이 지난 시점에 중단하고 거기까지의
+    결과를 저장/업로드합니다. 남은 종목은 다음 실행에서 처리됩니다.
     """
+    started_at = time.monotonic()
     if KRX_STOCKS is None:
         print("❗ KRX_STOCKS is None. load_krx_stocks()를 먼저 호출하세요.", flush=True)
         return []
@@ -681,10 +722,20 @@ def calculate_ncav_screening() -> list:
     total = len(codes_to_analyze)
     print(f"\n📊 NCAV 스크리닝 시작: {total}개 종목 분석 예정 (기존 {len(existing_ncav)}개)", flush=True)
 
+    # 분석할 종목이 없으면 즉시 종료. 기존 결과를 다시 저장/업로드하지 않는다
+    # (24시간 스킵 때문에 대부분의 사이클이 여기에 해당)
+    if total == 0:
+        print("⏩ NCAV: 갱신 대상 없음 → 저장/업로드 생략", flush=True)
+        return existing_list or []
+
     ncav_dict = dict(existing_ncav)
     analyzed = 0
 
     for i, code in enumerate(codes_to_analyze):
+        if time_budget_seconds is not None and (time.monotonic() - started_at) > time_budget_seconds:
+            print(f"⏱️ NCAV 시간 예산 {time_budget_seconds}초 소진 → {analyzed}개 분석 후 중단", flush=True)
+            break
+
         corp_code = corp_map.get(code)
         if not corp_code:
             continue
@@ -717,11 +768,14 @@ def calculate_ncav_screening() -> list:
                 json.dump(results, f, ensure_ascii=False)
             print(f"💾 NCAV [{i+1}/{total}] 중간 저장 ({analyzed}개 분석 완료)", flush=True)
 
-    # 최종 저장
+    # 최종 저장. 실제로 분석된 종목이 있을 때만 Supabase에 업로드
     results = sorted(ncav_dict.values(), key=lambda x: x.get('ncav_ratio') or float('-inf'), reverse=True)
     with open(NCAV_RESULTS_FILE, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False)
-    upload_to_supabase(NCAV_RESULTS_FILE, results)
+    if analyzed > 0:
+        upload_to_supabase(NCAV_RESULTS_FILE, results)
+    else:
+        print("⏩ NCAV: 신규 분석 결과 없음 → Supabase 업로드 생략", flush=True)
 
     ncav_positive = [r for r in results if r.get('ncav_positive')]
     print(f"\n✅ NCAV 스크리닝 완료: {len(results)}개 분석, NCAV > 시가총액: {len(ncav_positive)}개", flush=True)

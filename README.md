@@ -24,8 +24,52 @@ python app.py
 
 3. 웹 브라우저에서 접속:
 ```
-http://localhost:5000
+http://localhost:7777
 ```
+
+## 구조
+
+크롤링과 웹 서빙은 분리되어 있습니다.
+
+```
+[GitHub Actions cron]  평일 16:00 KST (장 마감 후)
+  crawl.py → 네이버/DART 크롤링
+           → Supabase Storage 업로드
+                    │
+                    ▼
+[Supabase Storage]  all_safety_margin_results.json
+                    ncav_results.json
+                    │  (웹앱은 읽기만)
+                    ▼
+[웹앱] app.py — 결과를 메모리에 캐싱해 서빙
+```
+
+웹앱은 크롤링하지 않습니다. 한 프로세스에 묶여 있을 때는 백그라운드
+크롤링이 웹 호스트의 아웃바운드 대역폭을 월 수십 GB씩 소모했습니다.
+분리 후 웹앱의 트래픽은 실제 사용자 요청과 시간당 1회의 캐시 갱신뿐입니다.
+
+### 크롤러 수동 실행
+
+```bash
+python crawl.py
+```
+
+### 필요한 환경변수
+
+| 변수 | 대상 | 설명 |
+|---|---|---|
+| `SUPABASE_URL` | 크롤러 + 웹앱 | Supabase 프로젝트 URL |
+| `SUPABASE_KEY` | 크롤러 + 웹앱 | Supabase API 키 |
+| `DART_API_KEY` | 크롤러 | 없으면 NCAV 스크리닝을 건너뜀 |
+| `CACHE_TTL` | 웹앱 | 캐시 수명(초). 기본 3600 |
+| `CRAWL_BUDGET_SECONDS` | 크롤러 | 안전마진 분석 시간 상한. 기본 3600 |
+| `NCAV_BUDGET_SECONDS` | 크롤러 | NCAV 스크리닝 시간 상한. 기본 1800 |
+| `STOCK_REFRESH_SECONDS` | 크롤러 | 종목 재분석 주기. 기본 3600 |
+
+크롤러용 값은 GitHub 저장소의 Settings → Secrets and variables → Actions에
+등록합니다. 시간 상한을 두는 이유는 Actions 실행이 무료 분을 초과하거나
+6시간 작업 제한에 걸려 결과를 통째로 잃는 것을 막기 위함입니다. 종목은
+오래된 순으로 처리되므로 중단돼도 다음 실행이 남은 종목부터 이어받습니다.
 
 ## 내재가치 계산 방법
 

@@ -1,5 +1,5 @@
 from flask import Flask, render_template, request, jsonify, send_file
-from safety_margin_calc_naver import analyze_all_stocks, load_krx_stocks, calculate_ncav_screening, download_from_supabase
+from safety_margin_calc_naver import download_from_supabase
 from datetime import datetime
 import os
 import threading
@@ -10,57 +10,104 @@ import math
 from io import BytesIO
 import random
 
-# 결과 데이터 메모리 캐시
-_results_cache = None
-_results_cache_mtime = 0
+# ── 데이터 로딩 (읽기 전용) ──────────────────────────
+# 크롤링은 이 프로세스에서 하지 않는다. crawl.py가 스케줄러(GitHub Actions)에서
+# 돌면서 Supabase Storage에 결과를 올리고, 웹앱은 그것을 읽기만 한다.
+# 덕분에 웹앱의 아웃바운드 트래픽은 캐시 갱신용 다운로드가 전부다.
+RESULTS_FILE = 'all_safety_margin_results.json'
+NCAV_FILE = 'ncav_results.json'
+
+# 캐시 수명(초). 크롤링이 하루 1회이므로 짧게 잡을 이유가 없다.
+CACHE_TTL = int(os.getenv('CACHE_TTL', '3600'))
+
+
+class RemoteDataCache:
+    """Supabase Storage의 JSON을 메모리에 캐싱한다.
+
+    - TTL이 지나면 다시 받아온다.
+    - 다운로드에 실패하면 이전 데이터를 계속 제공한다. 빈 목록을 내보내
+      화면이 통째로 비는 것보다 오래된 데이터가 낫다.
+    - 여러 워커 스레드가 동시에 만료를 감지해도 다운로드는 한 번만 한다.
+    """
+
+    def __init__(self, filename):
+        self.filename = filename
+        self._data = None
+        self._fetched_at = 0.0
+        self._lock = threading.Lock()
+
+    def _fresh(self):
+        return self._data is not None and (time.monotonic() - self._fetched_at) < CACHE_TTL
+
+    def _load_local(self):
+        """로컬 개발 환경에 파일이 있으면 그것을 쓴다."""
+        if not os.path.exists(self.filename):
+            return None
+        try:
+            with open(self.filename, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"⚠️ 로컬 {self.filename} 로드 실패: {e}", flush=True)
+            return None
+
+    def get(self):
+        if self._fresh():
+            return self._data
+
+        with self._lock:
+            # 락을 기다리는 동안 다른 스레드가 이미 갱신했을 수 있다
+            if self._fresh():
+                return self._data
+
+            # Supabase가 원본이다. 로컬 파일은 자격증명이 없거나 Supabase가
+            # 죽었을 때를 위한 폴백일 뿐이다. 순서가 반대면 한번 생긴
+            # 로컬 파일이 원격 갱신을 영구히 가려버린다.
+            data = download_from_supabase(self.filename)
+            if data is None:
+                data = self._load_local()
+
+            if data is None:
+                # 갱신 실패. 재시도 폭주를 막기 위해 타임스탬프는 갱신하고
+                # 기존 데이터(있으면)를 그대로 제공한다.
+                self._fetched_at = time.monotonic()
+                if self._data is None:
+                    print(f"❗ {self.filename} 를 가져오지 못했고 캐시도 비어 있음", flush=True)
+                    return []
+                print(f"⚠️ {self.filename} 갱신 실패 → 이전 데이터 유지", flush=True)
+                return self._data
+
+            self._data = data
+            self._fetched_at = time.monotonic()
+            return self._data
+
+
+_results_cache = RemoteDataCache(RESULTS_FILE)
+_ncav_cache = RemoteDataCache(NCAV_FILE)
+
+
+def _latest_timestamp(data):
+    """결과 항목들의 last_updated 중 가장 최근 값을 표시용 문자열로 반환."""
+    stamps = [s.get('last_updated') for s in data if s.get('last_updated')]
+    if not stamps:
+        return ''
+    try:
+        return datetime.fromisoformat(max(stamps)).strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return ''
+
 
 def get_results_data():
-    """결과 데이터를 캐싱하여 반환. 파일이 변경된 경우에만 다시 읽음."""
-    global _results_cache, _results_cache_mtime
-    try:
-        mtime = os.path.getmtime('all_safety_margin_results.json')
-        if _results_cache is None or mtime != _results_cache_mtime:
-            with open('all_safety_margin_results.json', 'r', encoding='utf-8') as f:
-                _results_cache = json.load(f)
-            _results_cache_mtime = mtime
-        return _results_cache, datetime.fromtimestamp(mtime).strftime('%Y-%m-%d %H:%M:%S')
-    except Exception:
-        return [], ''
+    """안전마진 결과와 마지막 갱신 시각을 반환."""
+    data = _results_cache.get()
+    return data, _latest_timestamp(data)
 
-def background_update():
-    """백그라운드에서 데이터를 업데이트하는 함수"""
-    try:
-        while True:
-            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 시작...")
-            load_krx_stocks()
-            print(f"KRX 데이터 업데이트 완료...")
-            analyze_all_stocks()
-            print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 완료")
-            # NCAV 스크리닝 (DART API, 안전마진 분석 완료 후 실행)
-            try:
-                calculate_ncav_screening()
-                print(f"[{datetime.now()}] NCAV 스크리닝 완료")
-            except Exception as e:
-                print(f"[{datetime.now()}] NCAV 스크리닝 중 오류: {str(e)}")
-            time.sleep(120)  # 2분 (느린 서버를 위해 간격 증가)
-    except Exception as e:
-        print(f"[{datetime.now()}] 백그라운드 데이터 업데이트 중 오류 발생: {str(e)}")
+
+def get_ncav_data():
+    """NCAV 스크리닝 결과를 반환."""
+    return _ncav_cache.get()
+
 
 app = Flask(__name__)
-
-# 앱 시작 시 git 미추적 데이터 파일이 없으면 Supabase에서 다운로드
-for filename in ['all_safety_margin_results.json', 'ncav_results.json']:
-    if not os.path.exists(filename):
-        print(f"📥 {filename} 없음, Supabase에서 다운로드 시도...")
-        data = download_from_supabase(filename)
-        if data:
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, ensure_ascii=False)
-            print(f"✅ {filename} 다운로드 완료 ({len(data)}개)")
-
-update_thread = threading.Thread(target=background_update)
-update_thread.daemon = True  # 메인 프로그램이 종료되면 스레드도 함께 종료
-update_thread.start()
 
 # 격언 데이터 로드
 def load_quotes():
@@ -333,38 +380,6 @@ def get_watchlist_data():
     except Exception as e:
         print(f"Error in get_watchlist_data: {str(e)}")
         return jsonify({'error': str(e)}), 500
-
-# NCAV 결과 캐시
-_ncav_cache = None
-_ncav_cache_mtime = 0
-
-def get_ncav_data():
-    """NCAV 결과 데이터를 캐싱하여 반환. 로컬 파일 없으면 Supabase에서 다운로드"""
-    global _ncav_cache, _ncav_cache_mtime
-
-    # 로컬 파일이 없으면 Supabase에서 다운로드
-    if not os.path.exists('ncav_results.json'):
-        data = download_from_supabase('ncav_results.json')
-        if data:
-            try:
-                with open('ncav_results.json', 'w', encoding='utf-8') as f:
-                    json.dump(data, f, ensure_ascii=False)
-                print("📁 NCAV: Supabase에서 다운로드 후 로컬 저장 완료")
-            except Exception:
-                pass
-            _ncav_cache = data
-            _ncav_cache_mtime = os.path.getmtime('ncav_results.json')
-            return _ncav_cache
-
-    try:
-        mtime = os.path.getmtime('ncav_results.json')
-        if _ncav_cache is None or mtime != _ncav_cache_mtime:
-            with open('ncav_results.json', 'r', encoding='utf-8') as f:
-                _ncav_cache = json.load(f)
-            _ncav_cache_mtime = mtime
-        return _ncav_cache
-    except Exception:
-        return []
 
 @app.route('/ncav')
 def ncav_filter():
