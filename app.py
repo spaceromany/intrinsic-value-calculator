@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify, send_file
+from flask import Flask, render_template, request, jsonify, send_file, Response
 # 크롤러 모듈(safety_margin_calc_naver)이 아니라 storage에서 가져온다.
 # 크롤러 모듈은 requests·lxml·FinanceDataReader·tqdm을 최상단에서 임포트하는데,
 # 웹앱은 그중 무엇도 쓰지 않는다.
@@ -123,6 +123,15 @@ def get_ncav_data():
 
 
 app = Flask(__name__)
+
+# 검색엔진에 노출되는 절대 URL의 기준. 호스팅을 옮기거나 커스텀 도메인을
+# 붙일 때 환경변수만 바꾸면 canonical·og:url·sitemap이 모두 따라온다.
+SITE_URL = os.getenv('SITE_URL', 'https://intrinsic-value-calculator.onrender.com').rstrip('/')
+
+
+@app.context_processor
+def inject_site_url():
+    return {'site_url': SITE_URL}
 
 # 격언 데이터 로드
 def load_quotes():
@@ -435,6 +444,23 @@ def ncav_filter():
 @app.route('/google6b6e5fdc5623d4eb.html')
 def google_verification():
     return send_file('static/google6b6e5fdc5623d4eb.html')
+
+
+# 크롤러는 사이트 루트의 /robots.txt 와 /sitemap.xml 만 조회한다.
+# 정적 파일로 두면 /static/robots.txt 로만 접근되어 아무도 읽지 않는다.
+@app.route('/robots.txt')
+def robots_txt():
+    return Response(render_template('robots.txt'), mimetype='text/plain')
+
+
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    # lastmod는 실제 데이터 갱신일을 쓴다. 크롤링이 하루 1회이므로
+    # changefreq=daily 와 일관되고, 없으면 오늘 날짜로 대체한다.
+    _, last_update = get_results_data()
+    lastmod = (last_update or '')[:10] or datetime.now().strftime('%Y-%m-%d')
+    return Response(render_template('sitemap.xml', lastmod=lastmod),
+                    mimetype='application/xml')
 
 if __name__ == '__main__':
 

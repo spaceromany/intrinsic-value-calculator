@@ -79,6 +79,7 @@ python crawl.py
 | `SUPABASE_BUCKET` | 크롤러 + 웹앱 | 버킷 이름. 기본 `stock-data` |
 | `DART_API_KEY` | 크롤러 | 없으면 NCAV 스크리닝을 건너뜀 |
 | `CACHE_TTL` | 웹앱 | 캐시 수명(초). 기본 3600 |
+| `SITE_URL` | 웹앱 | canonical·og:url·sitemap에 쓰이는 절대 URL 기준. 기본 `https://intrinsic-value-calculator.onrender.com`. 호스팅을 옮기거나 커스텀 도메인을 붙이면 이 값만 바꾸면 된다 |
 | `CRAWL_BUDGET_SECONDS` | 크롤러 | 안전마진 분석 시간 상한. 기본 3600 |
 | `NCAV_BUDGET_SECONDS` | 크롤러 | NCAV 스크리닝 시간 상한. 기본 1800 |
 | `STOCK_REFRESH_SECONDS` | 크롤러 | 종목 재분석 주기. 기본 3600 |

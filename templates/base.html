@@ -3,22 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>내재가치 계산기 - 주식 투자자를 위한 가치투자 도구</title>
     <!-- Primary Meta Tags -->
     <title>내재가치 계산기 – 주식 내재가치·안전마진 무료 계산기</title>
     <meta name="description"
             content="주식의 내재가치와 안전마진을 계산해주는 무료 웹 애플리케이션. 가치투자자들을 위한 필수 도구입니다." />
     <meta name="robots" content="index, follow" />
 
-    <!-- Canonical -->
-    <link rel="canonical" href="https://intrinsic-value-calculator.onrender.com/" />
+    <!-- Canonical: 페이지마다 자기 경로를 가리켜야 한다.
+         전부 루트로 고정하면 /top-stocks 가 색인에서 사라진다. -->
+    <link rel="canonical" href="{{ site_url }}{{ request.path }}" />
 
     <!-- Open Graph Meta Tags -->
     <meta property="og:site_name" content="내재가치 계산기" />
     <meta property="og:title" content="내재가치 계산기 - 한국 주식 투자자를 위한 가치투자 도구">
     <meta property="og:description" content="주식의 내재가치와 안전마진을 계산하는 무료 웹 애플리케이션. 한국 주식 투자하는 가치투자자들을 위한 필수 도구입니다.">
     <meta property="og:type" content="website">
-    <meta property="og:url" content="{{ request.url }}">
+    <meta property="og:url" content="{{ site_url }}{{ request.path }}">
 
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="summary">
@@ -31,7 +31,7 @@
         "@context": "https://schema.org",
         "@type": "WebApplication",
         "name": "내재가치 계산기",
-        "url": "https://intrinsic-value-calculator.onrender.com/",
+        "url": "{{ site_url }}/",
         "description": "주식의 내재가치와 안전마진을 계산해주는 무료 웹 애플리케이션",
         "applicationCategory": "FinanceApplication",
         "operatingSystem": "All",
@@ -49,7 +49,7 @@
         "@context": "https://schema.org",
         "@type": "WebSite",
         "name": "내재가치 계산기",
-        "url": "https://intrinsic-value-calculator.onrender.com/"
+        "url": "{{ site_url }}/"
     }
     </script>
     

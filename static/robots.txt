@@ -1,3 +1,0 @@
-User-agent: *
-Allow: /
-Sitemap: https://intrinsic-value-calculator.herokuapp.com/sitemap.xml 

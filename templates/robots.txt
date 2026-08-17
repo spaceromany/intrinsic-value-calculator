@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# 결과 API는 색인할 내용이 없다
+Disallow: /filter
+Disallow: /search
+Disallow: /ncav
+Disallow: /watchlist/
+
+Sitemap: {{ site_url }}/sitemap.xml
