@@ -109,21 +109,13 @@ def _latest_timestamp(data):
     재무지표(last_updated)는 분기 데이터라 최대 7일 주기로만 갱신되므로
     신선도 표시에 쓰면 주가가 최신인데도 오래된 것처럼 보인다.
 
-    장중에 받아온 값은 확정 종가가 아니므로 '종가'라고 쓰지 않는다.
-    이때는 거래일보다 몇 시 기준인지가 더 유용해서 시각까지 보여준다.
+    화면의 종목 카드는 이 값을 쓰지 않는다(그쪽은 price_updated 기준의
+    상대시간이다). 현재 이 함수의 유일한 소비자는 sitemap.xml의 lastmod로,
+    앞 10자를 YYYY-MM-DD로 잘라 쓰므로 반환값은 날짜로 시작해야 한다.
     """
     dates = [s.get('price_date') for s in data if s.get('price_date')]
     if dates:
-        if any(s.get('price_intraday') for s in data):
-            stamps = [s.get('price_updated') for s in data if s.get('price_updated')]
-            if stamps:
-                try:
-                    hhmm = datetime.fromisoformat(max(stamps)).strftime('%H:%M')
-                    return f"{max(dates)} {hhmm} 장중"
-                except ValueError:
-                    pass
-            return f"{max(dates)} 장중"
-        return f"{max(dates)} 종가"
+        return max(dates)
 
     stamps = [s.get('price_updated') or s.get('last_updated') for s in data]
     stamps = [s for s in stamps if s]
@@ -425,8 +417,11 @@ def get_watchlist_data():
                     'treasury_ratio': stock.get('treasury_ratio', None),
                     'dividend_yield': stock.get('dividend_yield', None),
                     'last_update': stock.get('last_updated', None),
-                    'price_date': stock.get('price_date', None),
-                    'price_intraday': stock.get('price_intraday', False)
+                    # 카드의 "마지막 업데이트"는 주가를 받아온 시각 기준이다.
+                    # last_update(재무지표 시각)를 쓰면 최대 7일까지 오래된
+                    # 값이 표시된다.
+                    'price_updated': stock.get('price_updated', None),
+                    'price_date': stock.get('price_date', None)
                 }
                 stocks.append(stock_data)
                 

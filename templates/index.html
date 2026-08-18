@@ -347,26 +347,16 @@ async function loadWatchlist() {
     }
 }
 
-// 종목 카드에 표시할 "마지막 업데이트" 문구.
+// 종목 카드에 표시할 "마지막 업데이트" 문구. "2시간 전" 형태의 상대시간이다.
 //
-// price_date(주가가 속한 거래일)를 최우선으로 쓴다. 휴장일이나 장 마감 전에
-// 크롤링하면 직전 거래일 종가가 오므로, 받아온 시각("방금 전")을 보여주면
-// 오늘 시세인 것처럼 오해된다. price_intraday면 정규장 중에 받은 체결가라
-// 아직 종가가 아니다.
+// 기준은 price_updated(주가를 받아온 시각)다. last_updated는 재무지표
+// (EPS·BPS) 크롤링 시각이라 최대 7일 주기로만 바뀌므로, 이걸로 신선도를
+// 표시하면 주가가 방금 갱신됐는데도 "3일 전"으로 보인다. 주가가 없던
+// 종목을 위한 폴백으로만 쓴다.
 //
-// last_updated는 재무지표(EPS·BPS) 크롤링 시각이라 최대 7일 주기로만 바뀐다.
-// 이걸로 신선도를 표시하면 주가가 방금 갱신됐는데도 "3일 전"으로 보인다.
-// 그래서 주가 기준일이 없을 때의 폴백으로만 쓴다.
-//
-// 관심종목 API는 같은 값을 last_update(단수)로 내보내므로 둘 다 받는다.
+// 관심종목 API는 재무지표 시각을 last_update(단수)로 내보내므로 둘 다 받는다.
 function formatPriceTime(stock) {
-    if (stock.price_date) {
-        return stock.price_intraday
-            ? `${stock.price_date} 장중`
-            : `${stock.price_date} 종가`;
-    }
-
-    const stamp = stock.last_updated || stock.last_update;
+    const stamp = stock.price_updated || stock.last_updated || stock.last_update;
     if (!stamp) return '정보 없음';
 
     const updateDate = new Date(stamp);

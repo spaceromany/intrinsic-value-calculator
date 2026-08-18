@@ -543,7 +543,7 @@ def refresh_prices(results_dict: dict, current_time) -> int:
     # 상류(fdr)의 KRX 목록은 장중에도 30~60분마다 갱신되므로 정규장 중에
     # 실행하면 Close 자리에 확정 종가가 아니라 그 시점의 체결가가 들어온다.
     # 기준일이 오늘이 아니면 휴장일이거나 아직 오늘 데이터가 없는 것이므로
-    # 장중일 수 없다.
+    # 장중일 수 없다. 화면 표시에는 쓰지 않고 로그 구분에만 쓴다.
     intraday = bool(
         trading_date == current_time.strftime('%Y-%m-%d')
         and is_market_hours(current_time)
@@ -565,7 +565,6 @@ def refresh_prices(results_dict: dict, current_time) -> int:
 
         stock['current_price'] = price
         stock['price_updated'] = stamp      # 가져온 시각
-        stock['price_intraday'] = intraday  # 확정 종가가 아니라 장중 체결가인지
         if trading_date:
             stock['price_date'] = trading_date   # 그 주가가 속한 거래일
         if has_volume:
@@ -698,7 +697,7 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None,
                 continue
             # 주가 관련 필드는 1단계에서 refresh_prices()가 KRX 기준으로 이미
             # 채워 놓았다. 여기서 통째로 새 dict를 만들면 price_date와
-            # price_intraday가 사라져, 재크롤링된 종목만 기준일 표시를 잃는다.
+            # price_updated가 사라져, 재크롤링된 종목만 갱신 시각 표시를 잃는다.
             # 그래서 주가는 KRX 값(전 종목이 같은 기준일)을 그대로 두고,
             # 이 단계는 EPS·BPS에서 나오는 값만 갱신한다.
             entry = results_dict.get(code) or {}
