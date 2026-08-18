@@ -108,9 +108,21 @@ def _latest_timestamp(data):
 
     재무지표(last_updated)는 분기 데이터라 최대 7일 주기로만 갱신되므로
     신선도 표시에 쓰면 주가가 최신인데도 오래된 것처럼 보인다.
+
+    장중에 받아온 값은 확정 종가가 아니므로 '종가'라고 쓰지 않는다.
+    이때는 거래일보다 몇 시 기준인지가 더 유용해서 시각까지 보여준다.
     """
     dates = [s.get('price_date') for s in data if s.get('price_date')]
     if dates:
+        if any(s.get('price_intraday') for s in data):
+            stamps = [s.get('price_updated') for s in data if s.get('price_updated')]
+            if stamps:
+                try:
+                    hhmm = datetime.fromisoformat(max(stamps)).strftime('%H:%M')
+                    return f"{max(dates)} {hhmm} 장중"
+                except ValueError:
+                    pass
+            return f"{max(dates)} 장중"
         return f"{max(dates)} 종가"
 
     stamps = [s.get('price_updated') or s.get('last_updated') for s in data]
@@ -413,7 +425,8 @@ def get_watchlist_data():
                     'treasury_ratio': stock.get('treasury_ratio', None),
                     'dividend_yield': stock.get('dividend_yield', None),
                     'last_update': stock.get('last_updated', None),
-                    'price_date': stock.get('price_date', None)
+                    'price_date': stock.get('price_date', None),
+                    'price_intraday': stock.get('price_intraday', False)
                 }
                 stocks.append(stock_data)
                 

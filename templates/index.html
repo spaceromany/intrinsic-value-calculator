@@ -172,9 +172,12 @@ async function searchStocks() {
             // price_date는 주가가 속한 거래일이다. 휴장일이나 장 마감 전에
             // 크롤링하면 직전 거래일 종가가 오므로, 받아온 시각("방금 전")을
             // 보여주면 오늘 시세인 것처럼 오해된다.
+            // price_intraday면 정규장 중에 받은 체결가라 아직 종가가 아니다.
             let timeText = '정보 없음';
             if (stock.price_date) {
-                timeText = `${stock.price_date} 종가`;
+                timeText = stock.price_intraday
+                    ? `${stock.price_date} 장중`
+                    : `${stock.price_date} 종가`;
             } else if (stock.last_updated) {
                 const updateDate = new Date(stock.last_updated);
                 const now = new Date();

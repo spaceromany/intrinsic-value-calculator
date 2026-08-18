@@ -14,6 +14,7 @@
   NCAV_BUDGET_SECONDS          NCAV 스크리닝 시간 상한 (기본 1800)
   FUNDAMENTALS_REFRESH_SECONDS 재무지표 재크롤링 주기 (기본 7일)
   CRAWL_WORKERS                네이버 동시 요청 수 (기본 6)
+  PRICE_ONLY                   1이면 주가만 갱신 (재무지표·NCAV 건너뜀)
 
 로컬 실행:
   python crawl.py
@@ -65,17 +66,29 @@ def main() -> int:
     crawl_budget = int(os.getenv('CRAWL_BUDGET_SECONDS', '3600'))
     ncav_budget = int(os.getenv('NCAV_BUDGET_SECONDS', '1800'))
 
+    # 주가만 갱신하는 경량 모드. 주가는 KRX 목록 응답 하나에 전 종목이 들어
+    # 있어 추가 네트워크 요청이 0회다. 상류 데이터가 장중 30~60분마다
+    # 갱신되므로, 이 모드로 장중에 자주 돌리면 시세가 따라 움직인다.
+    price_only = os.getenv('PRICE_ONLY', '').strip() in ('1', 'true', 'True')
+
     # CI는 체크아웃 직후라 krx_stocks.json의 mtime이 항상 '방금'이다.
     # force를 켜지 않으면 종목 목록이 영원히 갱신되지 않는다.
     _log("KRX 종목 목록 갱신...")
     load_krx_stocks(force=True)
 
-    _log(f"안전마진 분석 시작 (시간 예산 {crawl_budget}초)")
+    if price_only:
+        _log("주가 전용 모드 (재무지표·NCAV 건너뜀)")
+    else:
+        _log(f"안전마진 분석 시작 (시간 예산 {crawl_budget}초)")
     try:
-        analyze_all_stocks(time_budget_seconds=crawl_budget)
+        analyze_all_stocks(time_budget_seconds=crawl_budget, price_only=price_only)
     except Exception as e:
         _log(f"❌ 안전마진 분석 실패: {e}")
         return 1
+
+    if price_only:
+        _log(f"✅ 주가 갱신 완료 ({time.monotonic() - started:.0f}초)")
+        return 0
 
     if os.getenv('DART_API_KEY'):
         _log(f"NCAV 스크리닝 시작 (시간 예산 {ncav_budget}초)")

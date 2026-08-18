@@ -471,6 +471,17 @@ def get_latest_trading_date() -> str:
     return None
 
 
+def is_market_hours(now) -> bool:
+    """정규장(평일 09:00~15:30 KST) 시간대인지.
+
+    휴장일까지 걸러내지는 못한다. 호출부에서 get_latest_trading_date()가
+    오늘을 가리키는지와 함께 확인하면 휴장일은 자연히 제외된다.
+    """
+    if now.weekday() >= 5:
+        return False
+    return (now.hour, now.minute) >= (9, 0) and (now.hour, now.minute) < (15, 30)
+
+
 def prune_delisted(results_dict: dict, krx_codes: set) -> int:
     """KRX 목록에 없는 종목을 결과에서 제거한다.
 
@@ -528,7 +539,17 @@ def refresh_prices(results_dict: dict, current_time) -> int:
 
     # 종가가 실제로 어느 거래일 것인지. 휴장일에 돌면 직전 거래일이 나온다.
     trading_date = get_latest_trading_date()
-    print(f"📅 종가 기준일: {trading_date or '확인 실패'}", flush=True)
+
+    # 상류(fdr)의 KRX 목록은 장중에도 30~60분마다 갱신되므로 정규장 중에
+    # 실행하면 Close 자리에 확정 종가가 아니라 그 시점의 체결가가 들어온다.
+    # 기준일이 오늘이 아니면 휴장일이거나 아직 오늘 데이터가 없는 것이므로
+    # 장중일 수 없다.
+    intraday = bool(
+        trading_date == current_time.strftime('%Y-%m-%d')
+        and is_market_hours(current_time)
+    )
+    kind = '장중 시세' if intraday else '종가'
+    print(f"📅 {kind} 기준일: {trading_date or '확인 실패'}", flush=True)
 
     for row in KRX_STOCKS.itertuples(index=False):
         stock = results_dict.get(row.Code)
@@ -544,6 +565,7 @@ def refresh_prices(results_dict: dict, current_time) -> int:
 
         stock['current_price'] = price
         stock['price_updated'] = stamp      # 가져온 시각
+        stock['price_intraday'] = intraday  # 확정 종가가 아니라 장중 체결가인지
         if trading_date:
             stock['price_date'] = trading_date   # 그 주가가 속한 거래일
         if has_volume:
@@ -562,7 +584,8 @@ def refresh_prices(results_dict: dict, current_time) -> int:
     return updated
 
 
-def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list:
+def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None,
+                       price_only: bool = False) -> list:
     """
     전체 종목에 대해 안전마진을 계산합니다.
     각 종목별로 마지막 업데이트 시간을 저장하고,
@@ -572,6 +595,10 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list
     time_budget_seconds를 주면 그 시간이 지난 시점에 루프를 중단하고
     거기까지의 결과를 저장/업로드합니다. 종목은 오래된 순으로 정렬되어
     처리되므로, 중단되더라도 다음 실행이 남은 종목부터 이어서 갱신합니다.
+
+    price_only=True면 재무지표 크롤링을 통째로 건너뛰고 주가만 갱신합니다.
+    주가는 KRX 목록 응답 하나에 전 종목이 들어 있어 추가 요청이 0회이므로,
+    장중에 자주 돌려도 네이버에 부담을 주지 않고 1~2분이면 끝납니다.
     """
     started_at = time.monotonic()
 
@@ -621,20 +648,24 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list
     # 다시 긁는다. 오래된 종목부터 처리하므로 중단돼도 다음 실행이 이어받는다.
     to_crawl = []
     skipped_count = 0
-    for code, name in stock_list:
-        existing_stock = results_dict.get(code)
-        if existing_stock and 'last_updated' in existing_stock:
-            try:
-                last_updated = datetime.fromisoformat(existing_stock['last_updated'])
-                if (current_time - last_updated).total_seconds() < FUNDAMENTALS_REFRESH_SECONDS:
-                    skipped_count += 1
-                    continue
-            except ValueError:
-                pass  # 파싱 불가하면 다시 크롤링
-        to_crawl.append((code, name))
+    if price_only:
+        skipped_count = len(stock_list)
+        print(f"⏩ 주가 전용 모드 → 재무지표 크롤링 건너뜀 ({skipped_count}개)", flush=True)
+    else:
+        for code, name in stock_list:
+            existing_stock = results_dict.get(code)
+            if existing_stock and 'last_updated' in existing_stock:
+                try:
+                    last_updated = datetime.fromisoformat(existing_stock['last_updated'])
+                    if (current_time - last_updated).total_seconds() < FUNDAMENTALS_REFRESH_SECONDS:
+                        skipped_count += 1
+                        continue
+                except ValueError:
+                    pass  # 파싱 불가하면 다시 크롤링
+            to_crawl.append((code, name))
 
-    print(f"🔎 재무지표 크롤링 대상 {len(to_crawl)}개 "
-          f"(최신이라 건너뜀 {skipped_count}개), 동시 {CRAWL_WORKERS}개", flush=True)
+        print(f"🔎 재무지표 크롤링 대상 {len(to_crawl)}개 "
+              f"(최신이라 건너뜀 {skipped_count}개), 동시 {CRAWL_WORKERS}개", flush=True)
 
     reset_treasury_circuit()
 
@@ -665,17 +696,34 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None) -> list
         for code, name, result in outcomes:
             if not result or result.get('error'):
                 continue
-            results_dict[code] = {
+            # 주가 관련 필드는 1단계에서 refresh_prices()가 KRX 기준으로 이미
+            # 채워 놓았다. 여기서 통째로 새 dict를 만들면 price_date와
+            # price_intraday가 사라져, 재크롤링된 종목만 기준일 표시를 잃는다.
+            # 그래서 주가는 KRX 값(전 종목이 같은 기준일)을 그대로 두고,
+            # 이 단계는 EPS·BPS에서 나오는 값만 갱신한다.
+            entry = results_dict.get(code) or {}
+            entry.update({
                 'code': code,
                 'name': result['stock_name'],
-                'current_price': result['current_price'],
                 'intrinsic_value': result['intrinsic_value'],
-                'safety_margin': result['safety_margin'],
                 'treasury_ratio': result['treasury_ratio'],
                 'dividend_yield': result['dividend_yield'],
                 'last_updated': current_time.isoformat(),
-                'price_updated': current_time.isoformat(),
-            }
+            })
+
+            # KRX 주가가 없던 신규 종목만 크롤링으로 얻은 주가를 쓴다.
+            if not entry.get('current_price'):
+                entry['current_price'] = result['current_price']
+                entry['price_updated'] = current_time.isoformat()
+
+            # 내재가치가 바뀌었으므로 안전마진을 현재 주가 기준으로 다시 계산한다.
+            iv, price = entry.get('intrinsic_value'), entry.get('current_price')
+            if iv is not None and not (isinstance(iv, float) and math.isnan(iv)) and price:
+                entry['safety_margin'] = ((iv - price) / price) * 100
+            else:
+                entry['safety_margin'] = result['safety_margin']
+
+            results_dict[code] = entry
             analyzed_count += 1
             done_names.append(result['stock_name'])
 
