@@ -66,9 +66,9 @@ def main() -> int:
     crawl_budget = int(os.getenv('CRAWL_BUDGET_SECONDS', '3600'))
     ncav_budget = int(os.getenv('NCAV_BUDGET_SECONDS', '1800'))
 
-    # 주가만 갱신하는 경량 모드. 주가는 KRX 목록 응답 하나에 전 종목이 들어
-    # 있어 추가 네트워크 요청이 0회다. 상류 데이터가 장중 30~60분마다
-    # 갱신되므로, 이 모드로 장중에 자주 돌리면 시세가 따라 움직인다.
+    # 주가만 갱신하는 경량 모드. 네이버 실시간 시세를 400종목씩 묶어 받아
+    # 전 종목이 8회 요청·2초 안에 끝난다. 장중에 자주 돌리면 그때그때의
+    # 체결가가 반영된다.
     price_only = os.getenv('PRICE_ONLY', '').strip() in ('1', 'true', 'True')
 
     # CI는 체크아웃 직후라 krx_stocks.json의 mtime이 항상 '방금'이다.

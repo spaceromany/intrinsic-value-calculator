@@ -39,8 +39,8 @@ KRX_STOCKS = None
 SUPABASE_CHECKPOINT_EVERY = int(os.getenv('SUPABASE_CHECKPOINT_EVERY', '500'))
 
 # 재무지표(EPS·BPS·자사주) 재크롤링 주기 (초). 기본 7일.
-# 이 값들은 분기마다 바뀌므로 매일 긁을 이유가 없다. 매일 바뀌는 주가는
-# refresh_prices()가 KRX 목록에서 한 번에 받아 갱신한다.
+# 이 값들은 분기마다 바뀌므로 매일 긁을 이유가 없다. 계속 바뀌는 주가는
+# refresh_prices()가 네이버 실시간 시세로 묶음 조회해 갱신한다.
 FUNDAMENTALS_REFRESH_SECONDS = int(os.getenv('FUNDAMENTALS_REFRESH_SECONDS', str(7 * 86400)))
 
 # 네이버 크롤링 동시 요청 수. 너무 올리면 차단당한다.
@@ -114,9 +114,9 @@ def load_krx_stocks(force: bool = False):
         new_stocks = fdr.StockListing('KRX')
         if new_stocks is not None and len(new_stocks) > 0:
             # 필요한 컬럼만 유지
-            # Close(종가)와 Volume(거래량)까지 보존한다. 이 한 번의 응답에
-            # 전 종목 주가가 들어 있으므로, 주가를 얻으려고 종목당 네이버를
-            # 다시 긁을 이유가 없다. Volume은 거래정지 판별에 쓴다.
+            # Close·Volume도 보존한다. 평소 주가는 네이버 실시간 시세를
+            # 쓰지만(refresh_prices), 네이버가 막히면 이 값으로 폴백한다.
+            # 이 목록의 값은 제3자 저장소의 일별 CSV라 실시간이 아니다.
             keep = [c for c in ('Code', 'Name', 'Marcap', 'Close', 'Volume')
                     if c in new_stocks.columns]
             KRX_STOCKS = new_stocks[keep].copy()
@@ -471,17 +471,6 @@ def get_latest_trading_date() -> str:
     return None
 
 
-def is_market_hours(now) -> bool:
-    """정규장(평일 09:00~15:30 KST) 시간대인지.
-
-    휴장일까지 걸러내지는 못한다. 호출부에서 get_latest_trading_date()가
-    오늘을 가리키는지와 함께 확인하면 휴장일은 자연히 제외된다.
-    """
-    if now.weekday() >= 5:
-        return False
-    return (now.hour, now.minute) >= (9, 0) and (now.hour, now.minute) < (15, 30)
-
-
 def prune_delisted(results_dict: dict, krx_codes: set) -> int:
     """KRX 목록에 없는 종목을 결과에서 제거한다.
 
@@ -519,59 +508,167 @@ def prune_delisted(results_dict: dict, krx_codes: set) -> int:
     return len(orphans)
 
 
-def refresh_prices(results_dict: dict, current_time) -> int:
-    """KRX 목록의 종가로 전 종목 주가와 안전마진을 갱신한다.
+# 네이버 실시간 시세 조회 설정.
+# 한 요청에 종목코드를 콤마로 이어 붙인다. 실측으로 800개까지 문제없이
+# 돌아왔지만(URL 5,661자), URL 길이 제한에 여유를 두려고 400개로 잡았다.
+# 2,900종목 기준 8회 요청, 회당 0.25초 수준이다.
+NAVER_PRICE_URL = 'https://polling.finance.naver.com/api/realtime/domestic/stock/'
+NAVER_PRICE_CHUNK = int(os.getenv('NAVER_PRICE_CHUNK', '400'))
 
-    load_krx_stocks()가 이미 받아온 응답 하나에 전 종목 종가가 들어 있으므로
-    추가 네트워크 요청이 없다. 내재가치는 저장된 값을 그대로 쓰고 안전마진만
-    다시 계산한다. 내재가치는 EPS·BPS에서 나오고 그것들은 분기마다 바뀌지만,
-    주가는 매일 바뀌기 때문이다.
+
+def fetch_naver_prices(codes: list) -> dict:
+    """네이버에서 전 종목의 실시간 체결가를 받아온다.
+
+    KRX 목록(fdr)의 Close를 쓰지 않는 이유는 그것이 실시간이 아니기 때문이다.
+    fdr.StockListing('KRX')는 FinanceData/fdr_krx_data_cache 저장소에 올라온
+    일별 CSV를 내려받는 구조라, 그 저장소에 커밋이 없으면 값이 갱신되지 않는다.
+    실제로 2026-08-31 장중에 확인했을 때 그 CSV는 직전 거래일(08-28) 데이터를
+    그대로 담고 있었고, 삼성전자 기준 실제 시세와 1.85% 차이가 났다.
+
+    KRX(data.krx.co.kr)를 직접 호출하는 경로는 세션 쿠키 없이는 HTTP 400
+    'LOGOUT'으로 막혀 쓸 수 없다.
+
+    다만 이 엔드포인트는 네이버가 문서로 보장하는 공개 API가 아니다. 형식이
+    바뀌거나 막히면 조용히 빈 dict를 반환하고, 호출부가 KRX Close로 폴백한다.
+
+    :return: {종목코드: {'price': int, 'volume': int|None, 'open': bool,
+                        'date': 'YYYY-MM-DD'|None}}
+             open은 정규장 중 체결가인지 여부(marketStatus == 'OPEN'),
+             date는 그 체결이 속한 거래일(localTradedAt에서 뽑는다).
+    """
+    result = {}
+    if not codes:
+        return result
+
+    headers = {'User-Agent': 'Mozilla/5.0'}
+    chunks = [codes[i:i + NAVER_PRICE_CHUNK]
+              for i in range(0, len(codes), NAVER_PRICE_CHUNK)]
+
+    for chunk in chunks:
+        try:
+            resp = requests.get(
+                NAVER_PRICE_URL + ','.join(chunk),
+                headers=headers,
+                timeout=REQUEST_TIMEOUT,
+            )
+            datas = resp.json().get('datas', [])
+        except Exception as e:
+            # 한 묶음이 실패해도 나머지는 계속 시도한다. 전부 실패하면
+            # 빈 dict가 되어 호출부가 통째로 KRX 폴백을 타게 된다.
+            print(f"⚠️ 네이버 시세 조회 실패({len(chunk)}개): {type(e).__name__}", flush=True)
+            continue
+
+        for item in datas:
+            code = item.get('itemCode')
+            if not code:
+                continue
+            # ...Raw 필드는 콤마 없는 숫자다. 콤마가 섞인 표시용 필드를
+            # 파싱하다 실패하는 경로를 아예 만들지 않는다.
+            try:
+                price = int(item['closePriceRaw'])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if price <= 0:
+                continue
+
+            try:
+                volume = int(item['accumulatedTradingVolumeRaw'])
+            except (KeyError, TypeError, ValueError):
+                volume = None
+
+            # localTradedAt: '2026-08-31T12:53:24.703315+09:00'
+            traded_at = item.get('localTradedAt') or ''
+            result[code] = {
+                'price': price,
+                'volume': volume,
+                'open': item.get('marketStatus') == 'OPEN',
+                'date': traded_at[:10] if len(traded_at) >= 10 else None,
+            }
+
+    return result
+
+
+def refresh_prices(results_dict: dict, current_time) -> int:
+    """전 종목의 주가와 안전마진을 갱신한다.
+
+    가격은 네이버 실시간 시세(fetch_naver_prices)에서 받는다. KRX 목록의
+    Close는 실시간이 아니라 제3자 저장소의 일별 CSV라서, 그 저장소에 커밋이
+    없는 날에는 직전 거래일 값이 그대로 남는다. 네이버가 응답하지 않을 때만
+    그 Close로 폴백한다.
+
+    내재가치는 저장된 값을 그대로 쓰고 안전마진만 다시 계산한다. 내재가치는
+    EPS·BPS에서 나오고 그것들은 분기마다 바뀌지만, 주가는 계속 바뀌기 때문이다.
 
     :return: 주가가 갱신된 종목 수
     """
-    if KRX_STOCKS is None or 'Close' not in KRX_STOCKS.columns:
-        print("⚠️ KRX 목록에 종가(Close)가 없어 주가 갱신을 건너뛴다", flush=True)
+    if KRX_STOCKS is None:
+        print("⚠️ KRX 목록이 없어 주가 갱신을 건너뛴다", flush=True)
         return 0
 
+    has_close = 'Close' in KRX_STOCKS.columns
     has_volume = 'Volume' in KRX_STOCKS.columns
     updated = 0
+    from_naver = 0
     stamp = current_time.isoformat()
 
-    # 종가가 실제로 어느 거래일 것인지. 휴장일에 돌면 직전 거래일이 나온다.
-    trading_date = get_latest_trading_date()
+    # 결과에 들어 있는 종목만 조회하면 되지만, 신규 상장분도 KRX 목록에
+    # 들어오므로 목록 전체를 대상으로 한다.
+    codes = [str(c) for c in KRX_STOCKS['Code'].tolist()]
+    quotes = fetch_naver_prices(codes)
 
-    # 상류(fdr)의 KRX 목록은 장중에도 30~60분마다 갱신되므로 정규장 중에
-    # 실행하면 Close 자리에 확정 종가가 아니라 그 시점의 체결가가 들어온다.
-    # 기준일이 오늘이 아니면 휴장일이거나 아직 오늘 데이터가 없는 것이므로
-    # 장중일 수 없다. 화면 표시에는 쓰지 않고 로그 구분에만 쓴다.
-    intraday = bool(
-        trading_date == current_time.strftime('%Y-%m-%d')
-        and is_market_hours(current_time)
-    )
-    kind = '장중 시세' if intraday else '종가'
-    print(f"📅 {kind} 기준일: {trading_date or '확인 실패'}", flush=True)
+    if quotes:
+        # 정규장 중이면 확정 종가가 아니라 그 시점의 체결가다. 시간대를
+        # 추정하지 않고 네이버가 알려주는 marketStatus를 그대로 믿는다.
+        intraday = any(q['open'] for q in quotes.values())
+        print(f"💹 네이버 실시간 시세 {len(quotes)}개 수신 "
+              f"({'장중' if intraday else '장 마감'})", flush=True)
+    else:
+        intraday = False
+        print("⚠️ 네이버 시세를 받지 못했다 → KRX 목록의 Close로 폴백", flush=True)
+
+    # 주가가 어느 거래일 것인지.
+    # 네이버 응답의 체결 시각을 우선 쓴다. get_latest_trading_date()는 KOSPI
+    # 지수의 마지막 인덱스를 보는데, 장중에는 당일 봉이 아직 안 잡혀 직전
+    # 거래일이 나온다. 그러면 오늘 실시간 시세에 어제 날짜가 붙는다.
+    trading_date = next((q['date'] for q in quotes.values() if q.get('date')), None)
+    if not trading_date:
+        trading_date = get_latest_trading_date()
+    print(f"📅 기준일: {trading_date or '확인 실패'}", flush=True)
 
     for row in KRX_STOCKS.itertuples(index=False):
         stock = results_dict.get(row.Code)
         if stock is None:
             continue
 
-        try:
-            price = float(row.Close)
-        except (TypeError, ValueError):
+        quote = quotes.get(str(row.Code))
+        if quote:
+            price = float(quote['price'])
+            volume = quote['volume']
+            from_naver += 1
+        elif has_close:
+            # 네이버에 없는 종목(신규 상장 직후 등)은 KRX 값으로 채운다.
+            try:
+                price = float(row.Close)
+            except (TypeError, ValueError):
+                continue
+            volume = None
+            if has_volume:
+                try:
+                    volume = int(row.Volume)
+                except (TypeError, ValueError):
+                    volume = None
+        else:
             continue
+
         if price <= 0:
             continue
 
         stock['current_price'] = price
         stock['price_updated'] = stamp      # 가져온 시각
+        if volume is not None:
+            stock['volume'] = volume
         if trading_date:
             stock['price_date'] = trading_date   # 그 주가가 속한 거래일
-        if has_volume:
-            try:
-                stock['volume'] = int(row.Volume)
-            except (TypeError, ValueError):
-                stock['volume'] = None
 
         iv = stock.get('intrinsic_value')
         if iv is not None and not (isinstance(iv, float) and math.isnan(iv)):
@@ -579,7 +676,8 @@ def refresh_prices(results_dict: dict, current_time) -> int:
 
         updated += 1
 
-    print(f"💰 주가 갱신: {updated}개 종목 (네트워크 요청 0회)", flush=True)
+    print(f"💰 주가 갱신: {updated}개 종목 "
+          f"(네이버 {from_naver}개 / KRX 폴백 {updated - from_naver}개)", flush=True)
     return updated
 
 
@@ -596,8 +694,8 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None,
     처리되므로, 중단되더라도 다음 실행이 남은 종목부터 이어서 갱신합니다.
 
     price_only=True면 재무지표 크롤링을 통째로 건너뛰고 주가만 갱신합니다.
-    주가는 KRX 목록 응답 하나에 전 종목이 들어 있어 추가 요청이 0회이므로,
-    장중에 자주 돌려도 네이버에 부담을 주지 않고 1~2분이면 끝납니다.
+    주가는 네이버 실시간 시세를 400종목씩 묶어 받으므로 전 종목이 8회
+    요청·2초 안에 끝납니다. 장중에 자주 돌려도 부담이 없습니다.
     """
     started_at = time.monotonic()
 
@@ -637,9 +735,9 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None,
     # ── 0단계: 상장폐지 종목 정리 ─────────────────────────
     pruned = prune_delisted(results_dict, set(KRX_STOCKS['Code']))
 
-    # ── 1단계: 주가 갱신 (네트워크 요청 0회) ──────────────
-    # 이미 받아둔 KRX 목록에 전 종목 종가가 들어 있다. 매일 바뀌는 건
-    # 주가뿐이므로 전 종목을 여기서 한 번에 최신화한다.
+    # ── 1단계: 주가 갱신 (묶음 요청 8회 내외) ──────────────
+    # 네이버 실시간 시세를 400종목씩 묶어 받는다. 계속 바뀌는 건 주가뿐이므로
+    # 전 종목을 여기서 한 번에 최신화한다.
     price_updated = refresh_prices(results_dict, current_time)
 
     # ── 2단계: 재무지표 크롤링 (느림, 나눠서 진행) ────────
