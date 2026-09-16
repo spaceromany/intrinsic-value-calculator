@@ -275,71 +275,106 @@ def search_stock_codes(company_name: str) -> list:
 
 
 
+# 네이버 증권 종목 API (m.stock.naver.com).
+# 2026-09 무렵 finance.naver.com/item/main.naver 가 stock.naver.com(Next.js)으로
+# 리다이렉트되면서 옛 HTML 구조가 사라졌다. tr[10]/tr[12]/tr[13] 같은 행 번호
+# XPath가 전부 빈 결과를 내 종목명이 'Unknown', 내재가치가 None이 됐다.
+# 새 페이지는 아래 JSON API로 데이터를 받으며, 행을 'EPS'/'BPS'/'PBR' 제목으로
+# 찾고 추정치 컬럼은 isConsensus 플래그로 걸러내므로 위치 의존이 없다.
+NAVER_STOCK_API = 'https://m.stock.naver.com/api/stock/'
+
+
+def _naver_api_json(path: str):
+    """m.stock.naver.com/api/stock/{path} 를 받아 JSON으로 돌려준다.
+
+    없는 종목은 409 등 비정상 상태로 오므로 raise_for_status로 예외를 낸다.
+    호출부(analyze_stock)의 except가 {'error': ...}로 바꿔 준다.
+    """
+    resp = requests.get(NAVER_STOCK_API + path,
+                        headers={'User-Agent': 'Mozilla/5.0'},
+                        timeout=REQUEST_TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def _naver_num(text):
+    """'2,131' → 2131, '-7,512' → -7512, '1.51' → 1.51, '-'/'N/A'/'' → None.
+
+    옛 extract()와 같은 규칙이다: 소수점이 있으면 float, 없으면 int.
+    """
+    if text is None:
+        return None
+    t = str(text).strip().replace(',', '').replace('−', '-').replace('%', '')
+    if t in ('', '-', 'N/A'):
+        return None
+    try:
+        return float(t) if '.' in t else int(t)
+    except ValueError:
+        return None
+
+
+def fetch_naver_fundamentals(ticker: str) -> dict:
+    """종목명·배당수익률·3개년 EPS/BPS/PBR 을 네이버 API에서 받는다.
+
+    integration    : stockName, totalInfos[dividendYieldRatio]
+    finance/annual : financeInfo.trTitleList(기간, isConsensus) + rowList(행)
+
+    반환하는 DataFrame은 옛 파싱과 같은 모양이다. index가 시간순 오름차순
+    ["3년전","2년전","직전년도"] 이어야 한다. calculate_intrinsic_value()가
+    .values[0], [1], [2] 위치로 읽기 때문이다.
+
+    재무 행이 없는 종목(인프라펀드 등)은 rowList가 비어 오는데, 그때도 None
+    3행짜리 DataFrame을 만들어 준다. 옛 코드도 XPath가 비면 셀마다 None을
+    넣었고, calculate_intrinsic_value()는 그 경우 None을 반환한다.
+    """
+    integ = _naver_api_json(f'{ticker}/integration')
+    stock_name = (integ.get('stockName') or '').strip() or 'Unknown'
+
+    totals = {t.get('code'): t.get('value')
+              for t in integ.get('totalInfos', []) if isinstance(t, dict)}
+    dividend_yield = _naver_num(totals.get('dividendYieldRatio'))
+    last_close = _naver_num(totals.get('lastClosePrice'))
+
+    fin = _naver_api_json(f'{ticker}/finance/annual')
+    info = fin.get('financeInfo') or {}
+    # 확정 실적 컬럼만, 오래된 순으로. 마지막 3개가 3년전·2년전·직전년도다.
+    actual_keys = sorted(t['key'] for t in info.get('trTitleList') or []
+                         if t.get('isConsensus') == 'N' and t.get('key'))
+    actual_keys = actual_keys[-3:]
+
+    rows = {r.get('title'): (r.get('columns') or {})
+            for r in info.get('rowList') or [] if isinstance(r, dict)}
+
+    def series(title):
+        cols = rows.get(title, {})
+        vals = [_naver_num((cols.get(k) or {}).get('value')) for k in actual_keys]
+        return ([None] * (3 - len(vals)) + vals)[-3:]   # 항상 3개
+
+    periods = ["3년전", "2년전", "직전년도"]
+    df = pd.DataFrame({'PBR': series('PBR'), 'EPS': series('EPS'),
+                       'BPS': series('BPS')}, index=periods)
+
+    return {'stock_name': stock_name, 'dividend_yield': dividend_yield,
+            'last_close': last_close, 'df': df}
+
+
 def analyze_stock(ticker: str) -> dict:
     """
     종목코드를 입력받아 내재가치와 안전마진을 계산하여 반환합니다.
-    main.naver 1회 + wisereport 1회 = 총 2회 요청으로 모든 데이터를 수집합니다.
+    네이버 API 3회(integration, finance/annual, 실시간 시세) + wisereport 1회.
     """
     try:
-        headers = {"User-Agent": "Mozilla/5.0"}
+        # 1) 네이버 API 2회: 종목명·배당률(integration) + 3개년 재무(finance/annual)
+        fund = fetch_naver_fundamentals(ticker)
+        stock_name = fund['stock_name']
+        dividend_yield = fund['dividend_yield']
+        df = fund['df']
 
-        # 1) main.naver 한 번만 요청 (lxml)
-        url = f"https://finance.naver.com/item/main.naver?code={ticker}"
-        resp = requests.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
-        resp.raise_for_status()
-        doc = html.fromstring(resp.text)
-
-        # 종목명
-        stock_name_node = doc.xpath('//*[@id="middle"]/div[1]/div[1]/h2/a')
-        stock_name = stock_name_node[0].text_content().strip() if stock_name_node else "Unknown"
-
-        # 현재가
-        current_price = None
-        price_node = doc.xpath('//*[@id="chart_area"]//p[contains(@class,"no_today")]/em/span[contains(@class,"blind")]')
-        if price_node:
-            current_price = float(price_node[0].text_content().strip().replace(',', ''))
-
-        # 배당수익률
-        dividend_yield = None
-        try:
-            dvr_node = doc.xpath('//*[@id="_dvr"]')
-            if dvr_node:
-                dvr_text = dvr_node[0].text_content().strip()
-                if dvr_text and dvr_text != 'N/A':
-                    dividend_yield = float(dvr_text.replace('%', ''))
-        except:
-            pass
-
-        # 재무지표 (PBR, EPS, BPS) — 같은 doc에서 추출
-        def extract(xpath: str):
-            node = doc.xpath(xpath)
-            if not node:
-                return None
-            txt = node[0].text_content().strip().replace(",", "").replace("−", "-")
-            try:
-                return float(txt) if '.' in txt else int(txt)
-            except ValueError:
-                return None
-
-        periods = ["3년전", "2년전", "직전년도"]
-        data = {
-            "PBR": [
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[1]'),
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[2]'),
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[13]/td[3]'),
-            ],
-            "EPS": [
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[1]'),
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[2]'),
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[10]/td[3]'),
-            ],
-            "BPS": [
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[1]'),
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[2]'),
-                extract('//*[@id="content"]/div[5]/div[1]/table/tbody/tr[12]/td[3]'),
-            ]
-        }
-        df = pd.DataFrame(data, index=periods)
+        # 현재가는 실시간 시세 API가 정답이다. integration의 lastClosePrice는
+        # '전일' 종가라 장중에는 한 박자 늦다. 실시간이 비면 그 값으로 폴백한다.
+        quote = fetch_naver_prices([ticker]).get(ticker)
+        current_price = float(quote['price']) if quote else (
+            float(fund['last_close']) if fund['last_close'] else None)
 
         # 2) 자사주 정보 (wisereport — 별도 요청)
         treasury_stock = get_treasury_stock_info(ticker)
