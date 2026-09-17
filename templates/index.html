@@ -328,7 +328,7 @@ async function loadWatchlist() {
                                 </div>
                                 <div class="detail-item">
                                     <span class="detail-label">배당수익률</span>
-                                    <span class="detail-value">${formatNumber(stock.dividend_yield)}%</span>
+                                    <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
                                 </div>
                             </div>
                             <div class="mt-3 text-end">
