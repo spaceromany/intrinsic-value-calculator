@@ -266,52 +266,6 @@ def filter_stocks():
         print(f"필터링 중 오류 발생: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/watchlist/add', methods=['POST'])
-def add_to_watchlist():
-    try:
-        data = request.get_json()
-        print("Received watchlist add request:", data)  # 디버깅 로그 추가
-        
-        if not data or 'code' not in data or 'purchase_price' not in data or 'purchase_quantity' not in data:
-            print("Missing required fields in request")  # 디버깅 로그 추가
-            return jsonify({'error': 'Missing required fields'}), 400
-
-        code = data['code']
-        purchase_price = float(data['purchase_price'])
-        purchase_quantity = int(data['purchase_quantity'])
-        
-        # print(f"Processing stock: {code}, price: {purchase_price}, quantity: {purchase_quantity}")  # 디버깅 로그 추가
-
-        # Read stock information from cache
-        data, _ = get_results_data()
-        stock = next((s for s in data if s['code'] == code), None)
-        if not stock:
-            return jsonify({'error': 'Stock not found'}), 404
-
-        # Add purchase price and quantity to stock data
-        stock['purchase_price'] = purchase_price
-        stock['purchase_quantity'] = purchase_quantity
-        
-        # print("Returning stock data:", stock)  # 디버깅 로그 추가
-        return jsonify(stock)
-
-    except Exception as e:
-        print(f"Error adding to watchlist: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/watchlist/remove', methods=['POST'])
-def remove_from_watchlist():
-    try:
-        data = request.get_json()
-        if not data or 'code' not in data:
-            return jsonify({'error': '종목코드가 필요합니다.'}), 400
-
-        return jsonify({'message': '관심종목이 제거되었습니다.'})
-
-    except Exception as e:
-        print(f"관심종목 제거 중 오류: {str(e)}")  # 서버 로그에 오류 출력
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/watchlist/export', methods=['POST'])
 def export_watchlist():
     # pandas는 이 엔드포인트에서만 쓰인다. 최상단에서 임포트하면 모든 요청이
