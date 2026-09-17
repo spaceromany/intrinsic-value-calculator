@@ -786,7 +786,14 @@ def analyze_all_stocks(limit: int = 30, time_budget_seconds: int = None,
     else:
         for code, name in stock_list:
             existing_stock = results_dict.get(code)
-            if existing_stock and 'last_updated' in existing_stock:
+            # 종목명 'Unknown'은 파싱이 통째로 실패했다는 표식이다(정상 종목명일
+            # 수 없다). 2026-09 네이버 페이지 개편 때 그런 결과가 예외 없이
+            # last_updated=지금 으로 저장됐고, 갱신 주기(7일) 때문에 파서를
+            # 고친 뒤에도 일주일간 건너뛰어졌다. 그래서 주기와 무관하게 다시
+            # 긁는다. intrinsic_value None을 기준으로 삼지 않는 이유는, 재무표가
+            # 원래 없는 종목(인프라펀드 등)을 매번 재조회하게 되기 때문이다.
+            broken = existing_stock is not None and existing_stock.get('name') == 'Unknown'
+            if existing_stock and 'last_updated' in existing_stock and not broken:
                 try:
                     last_updated = datetime.fromisoformat(existing_stock['last_updated'])
                     if (current_time - last_updated).total_seconds() < FUNDAMENTALS_REFRESH_SECONDS:
