@@ -30,6 +30,7 @@ for _stream in (sys.stdout, sys.stderr):
 # 덕분에 웹앱의 아웃바운드 트래픽은 캐시 갱신용 다운로드가 전부다.
 RESULTS_FILE = 'all_safety_margin_results.json'
 NCAV_FILE = 'ncav_results.json'
+REDUCTION_FILE = 'reduction_dividend_results.json'
 
 # 캐시 수명(초). 크롤링이 하루 1회이므로 짧게 잡을 이유가 없다.
 CACHE_TTL = int(os.getenv('CACHE_TTL', '3600'))
@@ -97,6 +98,7 @@ class RemoteDataCache:
 
 _results_cache = RemoteDataCache(RESULTS_FILE)
 _ncav_cache = RemoteDataCache(NCAV_FILE)
+_reduction_cache = RemoteDataCache(REDUCTION_FILE)
 
 
 def _latest_timestamp(data):
@@ -136,6 +138,51 @@ def get_results_data():
 def get_ncav_data():
     """NCAV 스크리닝 결과를 반환."""
     return _ncav_cache.get()
+
+
+def get_reduction_data():
+    """감액배당 재원 스크리닝 결과(전 종목 레코드)를 반환."""
+    return _reduction_cache.get() or []
+
+
+# 카드에 실어 보낼 감액배당 필드만 고른다. 크롤러 레코드에는 scanned_years 같은
+# 운영용 필드가 함께 있어 그대로 내보내면 응답이 불필요하게 커진다.
+_REDUCTION_VIEW_KEYS = (
+    'has_reduction', 'history_complete', 'transfers', 'transfer_accounts',
+    'total_transferred', 'first_transfer_year', 'dividends_since_first',
+    'remaining_fund', 'remaining_years', 'last_dividend', 'last_dividend_year',
+    'legal_cap', 'capital_year', 'latest_fy',
+)
+
+
+def _reduction_view(rec):
+    return {k: rec.get(k) for k in _REDUCTION_VIEW_KEYS}
+
+
+def _reduction_index():
+    """종목코드 → 감액 이력이 있는 레코드. 없는 종목은 넣지 않는다."""
+    return {r['code']: r for r in get_reduction_data()
+            if r.get('has_reduction') and not r.get('no_data')}
+
+
+def _attach_reduction(stocks):
+    """종목 목록에 감액배당 정보를 'reduction' 키로 붙인 새 목록을 돌려준다.
+
+    캐시가 돌려준 dict를 직접 고치지 않고 복사본을 만든다. 캐시 항목을 변경하면
+    한 요청의 부가 필드가 다른 요청에까지 남는다. 우선주는 보통주(끝자리 0)의
+    이력을 따른다 — 준비금 감액은 회사 단위 결정이다.
+    """
+    idx = _reduction_index()
+    if not idx:
+        return list(stocks)
+    out = []
+    for stock in stocks:
+        code = stock.get('code', '') or ''
+        rec = idx.get(code)
+        if not rec and code and code[-1] != '0':
+            rec = idx.get(code[:-1] + '0')
+        out.append({**stock, 'reduction': _reduction_view(rec)} if rec else stock)
+    return out
 
 
 app = Flask(__name__)
@@ -200,7 +247,7 @@ def search():
         # 종목명으로 검색
         results = [stock for stock in data if query.lower() in stock['name'].lower()]
         return jsonify({
-            'stocks': results[:20],  # 최대 30개 결과 반환
+            'stocks': _attach_reduction(results[:20]),  # 최대 20개 결과 반환
             'last_update': last_update
         })
     except Exception as e:
@@ -258,7 +305,7 @@ def filter_stocks():
                 stock['ncav_ratio'] = ncav.get('ncav_ratio') if ncav else None
 
         result = {
-            'stocks': result_stocks,
+            'stocks': _attach_reduction(result_stocks),
             'actual_limit': len(result_stocks)
         }
         return jsonify(result)
@@ -380,7 +427,7 @@ def get_watchlist_data():
                 stocks.append(stock_data)
                 
         # print(f"Returning {len(stocks)} stocks")
-        return jsonify(stocks)
+        return jsonify(_attach_reduction(stocks))
     except Exception as e:
         print(f"Error in get_watchlist_data: {str(e)}")
         return jsonify({'error': str(e)}), 500
@@ -425,6 +472,50 @@ def ncav_filter():
     except Exception as e:
         print(f"NCAV 필터링 중 오류: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.route('/reduction-dividend')
+def reduction_dividend():
+    """감액배당 실시 기업 목록. 남은 감액배당 가능 연수가 큰 순.
+
+    ?complete=true  이력 집계가 끝나 재원·연수가 계산된 종목만
+    ?limit=N        기본 50
+    """
+    try:
+        data = [r for r in get_reduction_data()
+                if r.get('has_reduction') and not r.get('no_data')]
+        complete_only = request.args.get('complete', 'false').lower() == 'true'
+        limit = request.args.get('limit', default=50, type=int)
+        if complete_only:
+            data = [r for r in data if r.get('remaining_years') is not None]
+
+        # 안전마진 결과에서 현재가·배당수익률을 합친다
+        margin_data, _ = get_results_data()
+        margin = {s['code']: s for s in margin_data} if margin_data else {}
+
+        def _key(r):
+            ry = r.get('remaining_years')
+            return (0, -ry) if ry is not None else (1, 0)
+        data = sorted(data, key=_key)
+
+        stocks = []
+        for r in data[:limit]:
+            m = margin.get(r['code'], {})
+            stocks.append({
+                'code': r['code'], 'name': r.get('name'),
+                'current_price': m.get('current_price'),
+                'dividend_yield': m.get('dividend_yield'),
+                'safety_margin': m.get('safety_margin'),
+                **_reduction_view(r),
+            })
+        return jsonify({
+            'stocks': stocks,
+            'total': len(data),
+            'complete_count': len([r for r in data if r.get('remaining_years') is not None]),
+        })
+    except Exception as e:
+        print(f"감액배당 목록 중 오류: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/google6b6e5fdc5623d4eb.html')
 def google_verification():

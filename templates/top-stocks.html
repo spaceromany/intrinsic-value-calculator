@@ -48,6 +48,21 @@
                                   한국 백테스트 연복리 25~30% (강환국, 2002~2016)</small>"
                            style="cursor: pointer; color: #6c757d;"></i>
                     </button>
+                    <button type="button" class="btn btn-outline-primary" id="btnSortReduction" onclick="setSortMode('reduction')">
+                        감액배당 재원
+                        <i class="fas fa-info-circle ms-1"
+                           data-bs-toggle="tooltip"
+                           data-bs-html="true"
+                           title="<b>감액배당 (자본준비금 감액 → 배당)</b><br><br>
+                                  상법 461조의2에 따라 자본준비금을 줄여 이익잉여금으로 옮기면<br>
+                                  그 재원으로 지급하는 배당은 주주에게 <b>비과세</b>(취득가액 한도)<br><br>
+                                  <b>실시 내역</b> = 자본변동표의 준비금 → 이익잉여금 전입액 (DART)<br>
+                                  <b>남은 재원</b> = Σ전입액 − Σ그 이후 현금배당총액 (추정)<br>
+                                  <b>남은 연수</b> = 남은 재원 ÷ 직전년도 현금배당총액<br><br>
+                                  <small>배당이 비과세 재원부터 소진된다고 가정한 추정치입니다.<br>
+                                  결손금 보전(상법 460조)도 같은 이동이라 함께 표시되며 계정명으로 구분됩니다.</small>"
+                           style="cursor: pointer; color: #6c757d;"></i>
+                    </button>
                 </div>
             </div>
         </div>
@@ -120,6 +135,26 @@
         </div>
 
         <!-- NCAV 필터 섹션 (NCAV 모드에서만 표시) -->
+        <div class="mb-4 p-3 bg-light rounded" id="reductionFilterSection" style="display: none;">
+            <div class="d-flex flex-wrap align-items-center gap-3">
+                <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">표시:</h6>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary active" data-reduction-complete="false" onclick="filterReductionComplete(false)">감액 이력 전체</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-complete="true" onclick="filterReductionComplete(true)">재원 계산 완료만</button>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">표시 개수:</h6>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary active" data-reduction-limit="50" onclick="applyReductionLimit(50)">50개</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-limit="100" onclick="applyReductionLimit(100)">100개</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-limit="300" onclick="applyReductionLimit(300)">300개</button>
+                    </div>
+                </div>
+                <small class="text-muted" id="reductionSummary"></small>
+            </div>
+        </div>
         <div class="mb-4 p-3 bg-light rounded" id="ncavFilterSection" style="display: none;">
             <div class="d-flex flex-wrap align-items-center gap-3">
                 <div class="d-flex align-items-center">
@@ -202,7 +237,9 @@
 <script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
 <script>
 let currentDividendFilter = null;
-let currentSortMode = 'margin'; // 'margin' or 'ncav'
+let currentSortMode = 'margin'; // 'margin' | 'ncav' | 'reduction'
+let currentReductionLimit = 50;
+let currentReductionCompleteOnly = false;
 let currentNcavFilter = null;
 let currentNcavLimit = 30;
 let currentNcavDividendFilter = null;
@@ -444,13 +481,136 @@ function setSortMode(mode) {
     currentSortMode = mode;
     document.getElementById('btnSortMargin').classList.toggle('active', mode === 'margin');
     document.getElementById('btnSortNcav').classList.toggle('active', mode === 'ncav');
+    document.getElementById('btnSortReduction').classList.toggle('active', mode === 'reduction');
     document.getElementById('filterSection').style.display = mode === 'margin' ? '' : 'none';
     document.getElementById('ncavFilterSection').style.display = mode === 'ncav' ? '' : 'none';
+    document.getElementById('reductionFilterSection').style.display = mode === 'reduction' ? '' : 'none';
 
     if (mode === 'margin') {
         loadStocks();
-    } else {
+    } else if (mode === 'ncav') {
         loadNcavStocks();
+    } else {
+        loadReductionStocks();
+    }
+}
+
+function filterReductionComplete(onlyComplete) {
+    currentReductionCompleteOnly = onlyComplete;
+    document.querySelectorAll('[data-reduction-complete]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-reduction-complete="${onlyComplete}"]`);
+    if (sel) sel.classList.add('active');
+    loadReductionStocks();
+}
+
+function applyReductionLimit(limit) {
+    currentReductionLimit = limit;
+    document.querySelectorAll('[data-reduction-limit]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-reduction-limit="${limit}"]`);
+    if (sel) sel.classList.add('active');
+    loadReductionStocks();
+}
+
+// 원 → "1,234억" / "1.23조" 식의 짧은 표기. 감액 재원은 수백억~수조 원이라 원 단위는 읽기 어렵다.
+function fmtWon(v) {
+    if (v === null || v === undefined) return '-';
+    const eok = v / 1e8;
+    if (Math.abs(eok) >= 10000) return (eok / 10000).toFixed(2) + '조';
+    return Math.round(eok).toLocaleString() + '억';
+}
+
+// 전입 내역을 "2020: 7,232억 (자본준비금 이입액)" 줄들로. 연도 키가 '2026Q'면 올해 분기보고서분.
+function transferLines(r) {
+    const years = Object.keys(r.transfers || {}).sort();
+    if (!years.length) return '<span class="text-muted">-</span>';
+    return years.map(y => {
+        const total = Object.values(r.transfers[y]).reduce((a, b) => a + b, 0);
+        const names = (r.transfer_accounts && r.transfer_accounts[y]) ? r.transfer_accounts[y].join(', ') : '';
+        const label = y.endsWith('Q') ? y.slice(0, 4) + ' 분기' : y;
+        return `<div>${label}: <b>${fmtWon(total)}</b> <small class="text-muted">${names}</small></div>`;
+    }).join('');
+}
+
+async function loadReductionStocks() {
+    let url = `/reduction-dividend?limit=${currentReductionLimit}`;
+    if (currentReductionCompleteOnly) url += '&complete=true';
+    const grid = document.getElementById('stocksGrid');
+    try {
+        const response = await fetch(url);
+        const data = await response.json();
+        const stocks = data.stocks || [];
+        const summary = document.getElementById('reductionSummary');
+        if (summary) summary.textContent = `감액 이력 ${data.total || 0}개 종목 · 재원 계산 완료 ${data.complete_count || 0}개`;
+        grid.innerHTML = '';
+        if (stocks.length === 0) {
+            grid.innerHTML = '<div class="col-12 text-center text-muted mt-3">감액배당 이력이 집계된 종목이 아직 없습니다. 크롤러가 DART 자본변동표를 백필하는 중일 수 있습니다.</div>';
+            return;
+        }
+        stocks.forEach((stock, i) => {
+            const isInWatchlist = window.watchlistManager &&
+                window.watchlistManager.getWatchlist().some(item => item.code === stock.code);
+            const ry = stock.remaining_years;
+            let badgeClass = 'bg-secondary', badgeText = '집계 중';
+            if (ry !== null && ry !== undefined) {
+                badgeText = `${ry.toFixed(1)}년`;
+                badgeClass = ry >= 5 ? 'bg-success' : ry >= 2 ? 'bg-warning text-dark' : 'bg-danger';
+            }
+            const col = document.createElement('div');
+            col.className = 'col-12 col-sm-6 col-md-4';
+            col.innerHTML = `
+                <div class="card stock-card" onclick="toggleDetails('reduction-${stock.code}')">
+                    <div class="card-body position-relative">
+                        <div class="heart-icon" onclick="event.stopPropagation(); toggleWatchlist('${stock.code}')">
+                            <i class="${isInWatchlist ? 'fas' : 'far'} fa-heart"
+                               style="color: ${isInWatchlist ? '#dc3545' : '#6c757d'};"></i>
+                        </div>
+                        <h5 class="card-title">
+                            <span class="badge bg-primary rank-badge me-2">${i + 1}위</span>
+                            ${stock.name}
+                            <small class="text-muted d-block">${stock.code}</small>
+                        </h5>
+                        <p class="card-text mb-2">
+                            남은 감액배당 가능 연수:
+                            <span class="badge ${badgeClass}">${badgeText}</span>
+                            ${stock.history_complete ? '' : '<small class="text-muted ms-1">이력 집계 중</small>'}
+                        </p>
+                        <div id="details-reduction-${stock.code}" class="stock-details">
+                            <div class="detail-item">
+                                <span class="detail-label">감액배당 실시 내역</span>
+                                <span class="detail-value text-end">${transferLines(stock)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">전입 합계</span>
+                                <span class="detail-value">${fmtWon(stock.total_transferred)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">그 이후 배당 누계</span>
+                                <span class="detail-value">${fmtWon(stock.dividends_since_first)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">남은 감액배당 재원 (추정)</span>
+                                <span class="detail-value fw-bold">${fmtWon(stock.remaining_fund)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">직전년도 현금배당총액${stock.last_dividend_year ? ' (FY' + stock.last_dividend_year + ')' : ''}</span>
+                                <span class="detail-value">${fmtWon(stock.last_dividend)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">법적 추가 감액 한도 (이익준비금 제외)</span>
+                                <span class="detail-value">${fmtWon(stock.legal_cap)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">현재가 / 배당수익률</span>
+                                <span class="detail-value">${stock.current_price ? Math.round(stock.current_price).toLocaleString() + '원' : '-'} / ${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            grid.appendChild(col);
+        });
+    } catch (error) {
+        console.error('감액배당 목록 로드 오류:', error);
+        grid.innerHTML = '<div class="col-12 text-center text-danger mt-3">감액배당 목록을 불러오는 중 오류가 발생했습니다.</div>';
     }
 }
 

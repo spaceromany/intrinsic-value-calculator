@@ -9,12 +9,13 @@
 
 환경변수:
   SUPABASE_URL, SUPABASE_KEY   필수. 결과 업로드용
-  DART_API_KEY                 없으면 NCAV 스크리닝을 건너뛴다
+  DART_API_KEY                 없으면 NCAV·감액배당 스크리닝을 건너뛴다
   CRAWL_BUDGET_SECONDS         안전마진 분석 시간 상한 (기본 3600)
   NCAV_BUDGET_SECONDS          NCAV 스크리닝 시간 상한 (기본 1800)
   FUNDAMENTALS_REFRESH_SECONDS 재무지표 재크롤링 주기 (기본 7일)
   CRAWL_WORKERS                네이버 동시 요청 수 (기본 6)
   PRICE_ONLY                   1이면 주가만 갱신 (재무지표·NCAV 건너뜀)
+  REDUCTION_BUDGET_SECONDS     감액배당 재원 스크리닝 시간 상한 (기본 900)
 
 로컬 실행:
   python crawl.py
@@ -40,6 +41,7 @@ from safety_margin_calc_naver import (
     analyze_all_stocks,
     calculate_ncav_screening,
 )
+from reduction_dividend import calculate_reduction_dividend_screening
 
 KST = pytz.timezone('Asia/Seoul')
 
@@ -65,6 +67,7 @@ def main() -> int:
 
     crawl_budget = int(os.getenv('CRAWL_BUDGET_SECONDS', '3600'))
     ncav_budget = int(os.getenv('NCAV_BUDGET_SECONDS', '1800'))
+    reduction_budget = int(os.getenv('REDUCTION_BUDGET_SECONDS', '900'))
 
     # 주가만 갱신하는 경량 모드. 네이버 실시간 시세를 400종목씩 묶어 받아
     # 전 종목이 8회 요청·2초 안에 끝난다. 장중에 자주 돌리면 그때그때의
@@ -98,8 +101,16 @@ def main() -> int:
             # NCAV는 부가 기능이다. 여기서 실패해도 안전마진 결과는 이미
             # 업로드됐으므로 실행 전체를 실패로 만들지 않는다.
             _log(f"⚠️ NCAV 스크리닝 실패(무시하고 진행): {e}")
+
+        # 감액배당 재원. NCAV와 같은 DART 기반 부가 기능이라 같은 방식으로 격리한다.
+        # 종목당 연도별 2회 호출이라 첫 백필은 며칠에 걸쳐 나눠 진행된다(예산·한도).
+        _log(f"감액배당 재원 스크리닝 시작 (시간 예산 {reduction_budget}초)")
+        try:
+            calculate_reduction_dividend_screening(time_budget_seconds=reduction_budget)
+        except Exception as e:
+            _log(f"⚠️ 감액배당 스크리닝 실패(무시하고 진행): {e}")
     else:
-        _log("⏩ DART_API_KEY 없음 → NCAV 스크리닝 건너뜀")
+        _log("⏩ DART_API_KEY 없음 → NCAV·감액배당 스크리닝 건너뜀")
 
     _log(f"✅ 전체 완료 ({time.monotonic() - started:.0f}초)")
     return 0

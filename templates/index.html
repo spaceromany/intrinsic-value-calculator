@@ -207,6 +207,7 @@ async function searchStocks() {
                                 <span class="detail-label">배당수익률</span>
                                 <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
                             </div>
+                            ${reductionDetailItems(stock)}
                         </div>
                     </div>
                 </div>
@@ -330,6 +331,7 @@ async function loadWatchlist() {
                                     <span class="detail-label">배당수익률</span>
                                     <span class="detail-value">${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
                                 </div>
+                                ${reductionDetailItems(stock)}
                             </div>
                             <div class="mt-3 text-end">
                                 <small class="text-muted">마지막 업데이트: ${timeSinceUpdate}</small>
@@ -355,6 +357,37 @@ async function loadWatchlist() {
 // 종목을 위한 폴백으로만 쓴다.
 //
 // 관심종목 API는 재무지표 시각을 last_update(단수)로 내보내므로 둘 다 받는다.
+// 감액배당 정보가 있는 종목만 카드 상세에 세 줄을 덧붙인다.
+// (검색·관심종목 API가 'reduction' 키로 실어 보낸다. 이력 집계 중이면 재원·연수는 '집계 중')
+function fmtWonShort(v) {
+    if (v === null || v === undefined) return '-';
+    const eok = v / 1e8;
+    if (Math.abs(eok) >= 10000) return (eok / 10000).toFixed(2) + '조';
+    return Math.round(eok).toLocaleString() + '억';
+}
+function reductionDetailItems(stock) {
+    const r = stock.reduction;
+    if (!r || !r.has_reduction) return '';
+    const years = Object.keys(r.transfers || {}).sort()
+        .map(y => (y.endsWith('Q') ? y.slice(0, 4) + '분기' : y) + ' ' + fmtWonShort(Object.values(r.transfers[y]).reduce((a, b) => a + b, 0)))
+        .join(', ');
+    const pending = !r.history_complete;
+    const ry = r.remaining_years;
+    return `
+        <div class="detail-item">
+            <span class="detail-label">감액배당 실시</span>
+            <span class="detail-value">${years || '-'}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">남은 감액배당 재원 (추정)</span>
+            <span class="detail-value">${pending ? '집계 중' : fmtWonShort(r.remaining_fund)}</span>
+        </div>
+        <div class="detail-item">
+            <span class="detail-label">남은 감액배당 가능 연수</span>
+            <span class="detail-value fw-bold">${pending || ry === null || ry === undefined ? '집계 중' : ry.toFixed(1) + '년'}${r.last_dividend_year ? ' <small class="text-muted">(FY' + r.last_dividend_year + ' 배당 기준)</small>' : ''}</span>
+        </div>`;
+}
+
 function formatPriceTime(stock) {
     const stamp = stock.price_updated || stock.last_updated || stock.last_update;
     if (!stamp) return '정보 없음';

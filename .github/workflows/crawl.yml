@@ -48,7 +48,7 @@ jobs:
     # (DART_API_KEY는 여기서 시크릿 이름이 아니라 '환경'의 이름이다)
     environment: DART_API_KEY
 
-    # 시간 예산(2700+900초)보다 넉넉히 잡되, 폭주 시 과금을 막는 상한
+    # 시간 예산(2700+900+900초=75분)보다 넉넉히 잡되, 폭주 시 과금을 막는 상한
     timeout-minutes: 90
 
     steps:
@@ -91,6 +91,9 @@ jobs:
           #  비공개로 전환하면 Free 플랜 기준 월 2,000분 한도가 생긴다.)
           CRAWL_BUDGET_SECONDS: '2700'
           NCAV_BUDGET_SECONDS: '900'
+          # 감액배당 재원(DART 자본변동표). 종목당 연도별 2회 호출이라 첫 백필은
+          # 예산에 잘려 며칠에 걸쳐 진행되고, 이후엔 30일 주기로 새 사업연도만 본다.
+          REDUCTION_BUDGET_SECONDS: '900'
           # EPS·BPS는 분기 데이터라 매일 긁을 이유가 없다.
           FUNDAMENTALS_REFRESH_SECONDS: '604800'
           CRAWL_WORKERS: '6'
