@@ -953,7 +953,8 @@ def get_dart_financial(corp_code: str, bsns_year: int, reprt_code: str = '11011'
             return data
         return None
     except Exception as e:
-        print(f"DART API 오류 (corp_code={corp_code}): {e}")
+        # 예외 메시지에 요청 URL(인증키 포함)이 들어갈 수 있어 종류만 남긴다
+        print(f"DART API 오류 (corp_code={corp_code}): {type(e).__name__}")
         return None
 
 

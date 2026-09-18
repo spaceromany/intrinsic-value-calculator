@@ -11,10 +11,10 @@
 
   fnlttSinglAcntAll  전체 재무제표. sj_div=='SCE'(자본변동표) 행의 account_detail에
                      자본 구성요소 열이 붙어 온다. 준비금 전입은 이익잉여금 열 +X /
-                     자본잉여금 열 -X 의 쌍이다. 계정명은 회사마다 다르다
-                     ("자본준비금 이입액", "주식발행초과금의 이익잉여금 전입",
-                      "자본잉여금의 대체", "자본준비금의 전환",
-                      "주식발행초과금의결손금보전" 등) → 이름 정규식 + 열 부호로 잡는다.
+                     자본잉여금(주식발행초과금) 열 -X 의 쌍이다. 계정명은 회사마다
+                     다르고("자본준비금 이입액", "자본잉여금의 대체", "자본준비금의 전환",
+                     "주식발행초과금의결손금보전", 심지어 그냥 "이익잉여금 전입"(한국철강))
+                     이름만으로는 다 못 잡는다. 그래서 열의 ±쌍을 1차 규칙으로 쓴다.
                      같은 응답의 BS에서 자본금·자본잉여금도 얻어 법적 한도를 계산한다.
   alotMatter         배당에 관한 사항. '현금배당금총액(백만원)' 행의 당기 값.
 
@@ -27,7 +27,8 @@
 
 한계(추정으로 표기): 배당이 비과세 재원(감액분)부터 소진된다고 가정한다.
 결손금 보전(상법 460조)도 같은 이동이라 잡히지만 세법상 성격이 다를 수 있어
-계정명을 그대로 노출한다. 법적 한도는 이익준비금을 구할 수 없어 과소 추정이다.
+계정명을 그대로 노출한다. 법적 한도는 별도재무제표의 자본잉여금 전체를 쓰므로
+회사가 공시하는 '전입 가능액'(자본준비금 해당분)보다 클 수 있다.
 """
 
 import collections
@@ -57,27 +58,47 @@ HISTORY_FROM = int(os.getenv('REDUCTION_HISTORY_FROM', '2020'))
 
 DART = 'https://opendart.fss.or.kr/api/'
 
-# 준비금 → 이익잉여금 이동을 뜻하는 계정명. 앞뒤 순서가 회사마다 뒤바뀌므로 양방향.
+# 준비금 → 이익잉여금 이동을 뜻하는 계정명(2차 규칙). 앞뒤 순서가 회사마다 뒤바뀌므로 양방향.
 _RESERVE = '(자본준비금|주식발행초과금|자본잉여금|준비금)'
 _VERB = '(이입|전입|대체|전환|감소|감액|보전)'
 TRANSFER_RE = re.compile(_RESERVE + '.*' + _VERB + '|(이입|전입|대체|전환).*' + _RESERVE)
-# 자기주식 거래·기타포괄손익 대체는 준비금 감액이 아니다. 계정명에 자본금이 들어가면
-# 무상증자(잉여금 → 자본금) 방향이라 제외한다. 남은 오탐은 열 부호 규칙이 걸러낸다.
-EXCLUDE_WORDS = ('자기주식', '기타포괄', '자본금')
+# 준비금 감액이 아닌데 열이 비슷하게 움직일 수 있는 계정명. 자기주식·기타포괄손익 대체,
+# 배당, 손익, 기초/기말 합계 행, 그리고 '자본금'이 들어가면 무상증자(잉여금 → 자본금) 방향.
+EXCLUDE_WORDS = ('자기주식', '기타포괄', '자본금', '배당', '순이익', '순손실', '기초', '기말',
+                 '자본총계', '총계', '지분법', '재측정', '연결실체', '종속', '합병', '분할',
+                 '재분류', '분류')   # 계정재분류(SK디스커버리 2023)는 준비금 감액이 아니다
+# 자본 구성요소 열 이름에서 '준비금 쪽'으로 볼 단서
+_SURPLUS_COL = ('자본잉여금', '주식발행초과금', '자본준비금', '준비금')
 
 
 class DartQuotaExceeded(Exception):
     """DART 일일 요청 한도(status 020) 또는 키 오류. 이 실행에서는 더 시도하지 않는다."""
 
 
+class DartRequestFailed(Exception):
+    """네트워크·파싱 실패. 원인 URL을 담지 않는다 — 쿼리스트링에 인증키가 들어 있다."""
+
+
 def _dart(endpoint, **params):
     """OpenDART 호출. status 000이면 list를, 013(데이터 없음)이면 None을 돌려준다.
 
     한도 초과·키 오류는 예외로 올려 실행을 멈춘다. 계속 두드리면 하루치 한도만 태운다.
+    일시적 접속 오류는 한 번 더 시도한다. requests 예외 메시지에는 요청 URL이
+    통째로 들어가는데 그 안에 crtfc_key가 있으므로, 그대로 올리지 않고 종류만 남긴다.
     """
-    resp = requests.get(DART + endpoint, params=dict(crtfc_key=DART_API_KEY, **params),
-                        timeout=REQUEST_TIMEOUT)
-    data = resp.json()
+    last = None
+    for attempt in range(2):
+        try:
+            resp = requests.get(DART + endpoint, params=dict(crtfc_key=DART_API_KEY, **params),
+                                timeout=REQUEST_TIMEOUT)
+            data = resp.json()
+            break
+        except (requests.RequestException, ValueError) as e:
+            last = type(e).__name__
+            if attempt == 0:
+                time.sleep(1.5)
+    else:
+        raise DartRequestFailed('%s (%s)' % (endpoint, last))
     status = data.get('status')
     if status == '000':
         return data.get('list') or []
@@ -105,11 +126,28 @@ def latest_fiscal_year(now=None):
     return now.year - 1 if now.month >= 4 else now.year - 2
 
 
-def fetch_statements(corp_code, year, reprt_code='11011'):
-    """전체 재무제표 한 해치. 연결(CFS)이 없으면 별도(OFS). 둘 다 없으면 None."""
-    for fs_div in ('CFS', 'OFS'):
+def quarterly_report_codes(now=None):
+    """올해 분기·반기보고서 중 지금 시점에 제출됐을 법한 것부터, 최신순.
+
+    제출 기한은 분기 말 + 45일: 1분기(11013) 5/15, 반기(11012) 8/14, 3분기(11014) 11/14.
+    아직 나올 수 없는 보고서를 조회해 DART 호출을 낭비하지 않기 위한 것이다.
+    """
+    now = now or datetime.now()
+    codes = []
+    if now.month >= 11:
+        codes.append('11014')
+    if now.month >= 8:
+        codes.append('11012')
+    if now.month >= 5:
+        codes.append('11013')
+    return codes
+
+
+def fetch_statements(corp_code, year, reprt_code='11011', fs_div=None):
+    """전체 재무제표 한 해치. fs_div를 주지 않으면 연결(CFS) → 별도(OFS) 순으로 시도."""
+    for div in ((fs_div,) if fs_div else ('CFS', 'OFS')):
         rows = _dart('fnlttSinglAcntAll.json', corp_code=corp_code, bsns_year=str(year),
-                     reprt_code=reprt_code, fs_div=fs_div)
+                     reprt_code=reprt_code, fs_div=div)
         if rows:
             return rows
     return None
@@ -118,35 +156,56 @@ def fetch_statements(corp_code, year, reprt_code='11011'):
 def extract_transfers(rows):
     """자본변동표에서 준비금 → 이익잉여금 전입액을 계정명별로 뽑는다.
 
-    같은 계정명이 자본 구성요소 열마다 한 행씩 반복된다(이익잉여금 +X, 자본잉여금 -X,
-    소계 열에 -X 등). 이익잉여금 열이 양수인 행만 전입으로 인정하고 계정명별 max를
-    취해 중복을 없앤다. 이익잉여금이 줄어드는 반대 방향(무상증자·결손 등)은 자연히 빠진다.
+    같은 계정명이 자본 구성요소 열마다 한 행씩 반복된다. 두 규칙의 합집합으로 잡는다.
+
+      1차(열 규칙): 이익잉여금 열이 +X 이고 자본잉여금·주식발행초과금·준비금 열이 -X 로
+             거울처럼 움직이면 계정명과 무관하게 전입이다. 한국철강처럼 계정명이
+             그냥 '이익잉여금 전입'인 회사는 이 규칙으로만 잡힌다.
+      2차(이름 규칙): 계정명이 준비금 감액을 뜻하고 이익잉여금 열이 +X.
+
+    두 규칙 모두 EXCLUDE_WORDS 계정명은 걸러낸다. 이익잉여금이 줄어드는 반대 방향
+    (무상증자·소각·배당)은 +X 조건에서 자연히 빠진다. 금액은 이익잉여금 열의 max.
 
     :return: {계정명: 금액(원)}
     """
-    best = collections.defaultdict(int)
+    by_name = collections.defaultdict(lambda: {'re_pos': 0, 'sur_neg': 0})
     for it in rows or []:
         if it.get('sj_div') != 'SCE':
             continue
         name = (it.get('account_nm') or '').strip()
-        if not TRANSFER_RE.search(name) or any(w in name for w in EXCLUDE_WORDS):
+        if not name or name == '기타' or any(w in name for w in EXCLUDE_WORDS):
             continue
         detail = it.get('account_detail') or ''
-        if '이익잉여금' not in detail:
-            continue
         value = _amount(it.get('thstrm_amount'))
-        if value and value > 0:
-            best[name] = max(best[name], value)
-    return dict(best)
+        if not value:
+            continue
+        # 열 판별: 소계·합계 열이 '이익잉여금'을 포함하지는 않으므로 마지막 구성요소 이름으로 본다
+        col = detail.split('|')[-1]
+        if '이익잉여금' in col and value > 0:
+            by_name[name]['re_pos'] = max(by_name[name]['re_pos'], value)
+        elif any(k in col for k in _SURPLUS_COL) and value < 0:
+            by_name[name]['sur_neg'] = min(by_name[name]['sur_neg'], value)
+
+    out = {}
+    for name, v in by_name.items():
+        re_pos, sur_neg = v['re_pos'], v['sur_neg']
+        if re_pos <= 0:
+            continue
+        mirrored = sur_neg < 0 and abs(re_pos + sur_neg) <= re_pos * 0.01
+        if mirrored or TRANSFER_RE.search(name):
+            out[name] = re_pos
+    return out
 
 
 def extract_capital(rows):
     """재무상태표에서 자본금·자본잉여금을 뽑아 법적 감액 가능 한도를 계산한다.
 
     상법 461조의2: (자본준비금 + 이익준비금) − 1.5 × 자본금 을 초과분 한도로 감액 가능.
-    이익준비금은 BS·자본변동표 어디에도 오지 않아 빼고 계산한다 → 과소(보수적) 추정.
+    이익준비금은 DART에 오지 않아 빼고, 자본준비금은 자본잉여금 전체로 갈음한다.
     자본잉여금은 dart_CapitalSurplus가 표준이지만 삼성전자처럼 주식발행초과금
     (ifrs-full_SharePremium)만 보고하는 회사도 있어 둘을 모두 본다.
+    별도재무제표(OFS)로 계산해야 한다. 상법상 준비금·배당가능이익은 법인 단위라
+    연결 수치를 쓰면 크게 어긋난다(SK디스커버리: 연결 8,186억 vs 별도 3,483억).
     """
     issued = surplus = None
     premium_sum = 0
@@ -263,31 +322,37 @@ def _scan_company(code, corp_code, name, existing, latest_fy, current_time):
             rec['transfers'][str(year)] = transfers
             rec['transfer_accounts'][str(year)] = sorted(transfers)
         if not rec.get('capital_year') or year > rec['capital_year']:
-            cap = extract_capital(rows)
+            # 법적 한도는 별도재무제표로. 방금 받은 것이 별도였으면 그대로 쓰고,
+            # 연결이었으면 별도를 한 번 더 받는다(최신 연도만이라 회사당 1회).
+            ofs = fetch_statements(corp_code, year, fs_div='OFS')
+            cap = extract_capital(ofs or rows)
             if cap['legal_cap'] is not None:
                 rec.update(cap)
                 rec['capital_year'] = year
+                rec['capital_basis'] = '별도' if ofs else '연결'
         div = fetch_cash_dividend(corp_code, year)
         if div is not None:
             rec['dividends'][str(year)] = div
         scanned.add(year)
 
-    # 감액 회사는 올해 분기·반기보고서도 본다. 임시주총 결의(메리츠 2023-11 식)는
-    # 다음 사업보고서까지 기다리면 반년 넘게 놓친다.
-    if rec['transfers']:
-        this_year = latest_fy + 1
-        for reprt in ('11014', '11012', '11013'):      # 3분기 → 반기 → 1분기 중 최신
-            rows = fetch_statements(corp_code, this_year, reprt)
-            if rows:
-                q = extract_transfers(rows)
-                key = '%dQ' % this_year
-                if q:
-                    rec['transfers'][key] = q
-                    rec['transfer_accounts'][key] = sorted(q)
-                else:
-                    rec['transfers'].pop(key, None)
-                    rec['transfer_accounts'].pop(key, None)
-                break
+    # 올해 분기·반기보고서도 본다. 3월 정기주총이나 임시주총에서 결의한 감액은
+    # 다음 사업보고서까지 기다리면 반년 넘게 놓친다(SK디스커버리 2026-03 1,200억).
+    # 예전에 감액한 회사만 보면 처음 감액하는 회사를 놓치므로 전 종목이 대상이다.
+    this_year = latest_fy + 1
+    key = '%dQ' % this_year
+    for reprt in quarterly_report_codes(current_time):
+        rows = fetch_statements(corp_code, this_year, reprt)
+        if rows:
+            got_any_statement = True
+            q = extract_transfers(rows)
+            if q:
+                rec['transfers'][key] = q
+                rec['transfer_accounts'][key] = sorted(q)
+            else:
+                rec['transfers'].pop(key, None)
+                rec['transfer_accounts'].pop(key, None)
+            rec['quarterly_report'] = reprt
+            break
 
     rec['scanned_years'] = sorted(scanned)
     rec['history_complete'] = all(y in scanned for y in range(HISTORY_FROM, latest_fy + 1))

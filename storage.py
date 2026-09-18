@@ -37,9 +37,17 @@ def key_kind() -> str:
 supabase: Client = None
 
 
+# 로컬 테스트 모드. 켜져 있으면 자격증명이 .env에 있어도 클라이언트를 만들지 않아
+# 업로드·다운로드가 전부 건너뛰어진다(업로드 False, 다운로드 None → 로컬 파일 폴백).
+# 테스트 크롤링이 운영 Storage의 결과 파일을 덮어쓰는 사고를 막기 위한 장치다.
+LOCAL_ONLY = os.getenv('LOCAL_ONLY', '').strip() in ('1', 'true', 'True')
+
+
 def get_supabase_client():
-    """Supabase 클라이언트 반환 (싱글톤)"""
+    """Supabase 클라이언트 반환 (싱글톤). LOCAL_ONLY면 항상 None."""
     global supabase
+    if LOCAL_ONLY:
+        return None
     if supabase is None and SUPABASE_URL and SUPABASE_KEY:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
     return supabase
@@ -82,7 +90,7 @@ def download_from_supabase(file_name: str) -> list:
     try:
         client = get_supabase_client()
         if client is None:
-            print("⚠️ Supabase 자격증명 없음 (SUPABASE_URL/SUPABASE_KEY)", flush=True)
+            print("⚠️ Supabase 미사용 (LOCAL_ONLY 또는 자격증명 없음) → 로컬 파일 폴백", flush=True)
             return None
 
         response = client.storage.from_(SUPABASE_BUCKET).download(file_name)

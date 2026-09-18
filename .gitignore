@@ -44,3 +44,7 @@ all_safety_margin_results.json
 ncav_results.json
 
 ref/
+# 크롤러 산출물 (Supabase Storage가 원본, 로컬 테스트 시 생성됨)
+all_safety_margin_results.json
+ncav_results.json
+reduction_dividend_results.json

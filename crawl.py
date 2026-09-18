@@ -16,6 +16,8 @@
   CRAWL_WORKERS                네이버 동시 요청 수 (기본 6)
   PRICE_ONLY                   1이면 주가만 갱신 (재무지표·NCAV 건너뜀)
   REDUCTION_BUDGET_SECONDS     감액배당 재원 스크리닝 시간 상한 (기본 900)
+  LOCAL_ONLY                   1이면 Supabase 없이 로컬 JSON만 읽고 쓴다 (로컬 테스트용)
+  CRAWL_CODES                  콤마로 구분한 종목코드. 주면 그 종목만 처리한다 (로컬 테스트용)
 
 로컬 실행:
   python crawl.py
@@ -53,11 +55,19 @@ def _log(msg: str):
 def main() -> int:
     started = time.monotonic()
 
+    # 로컬 테스트 모드. storage.py가 LOCAL_ONLY를 보고 클라이언트를 만들지 않으므로
+    # .env에 자격증명이 있어도 운영 Storage를 읽거나 쓰지 않는다(업로드 False /
+    # 다운로드 None → 로컬 JSON). 웹앱(app.py) 캐시도 같은 폴백을 타므로 이 모드로
+    # 크롤링한 뒤 LOCAL_ONLY=1 python app.py 를 띄우면 결과를 그대로 볼 수 있다.
+    local_only = os.getenv('LOCAL_ONLY', '').strip() in ('1', 'true', 'True')
+
     missing = [k for k in ('SUPABASE_URL', 'SUPABASE_KEY') if not os.getenv(k)]
-    if missing:
+    if missing and not local_only:
         _log(f"❌ 환경변수 누락: {', '.join(missing)}")
-        _log("   결과를 올릴 곳이 없으므로 크롤링하지 않고 종료한다.")
+        _log("   결과를 올릴 곳이 없으므로 크롤링하지 않고 종료한다. (로컬 테스트는 LOCAL_ONLY=1)")
         return 1
+    if local_only:
+        _log("🧪 로컬 전용 모드: Supabase 업로드 없음, 결과는 현재 디렉터리 JSON")
 
     # 어느 키로 업로드하는지 남긴다. service_role 시크릿을 등록해도 워크플로에
     # env 매핑을 빠뜨리면 조용히 anon 키로 폴백하므로, 로그가 없으면
@@ -78,6 +88,17 @@ def main() -> int:
     # force를 켜지 않으면 종목 목록이 영원히 갱신되지 않는다.
     _log("KRX 종목 목록 갱신...")
     load_krx_stocks(force=True)
+
+    # 종목 제한(테스트용). KRX 목록 자체를 좁히므로 안전마진·NCAV·감액배당이
+    # 전부 그 종목만 본다. 상장폐지 정리는 목록이 2,000개 미만이면 스스로
+    # 건너뛰므로(MIN_KRX_SIZE_FOR_PRUNE) 기존 결과를 잘못 지우는 일은 없다.
+    codes_env = os.getenv('CRAWL_CODES', '').strip()
+    if codes_env:
+        import safety_margin_calc_naver as core
+        wanted = [c.strip() for c in codes_env.split(',') if c.strip()]
+        if core.KRX_STOCKS is not None:
+            core.KRX_STOCKS = core.KRX_STOCKS[core.KRX_STOCKS['Code'].isin(wanted)].copy()
+            _log(f"🧪 종목 제한: {len(core.KRX_STOCKS)}개 ({', '.join(wanted[:8])}{' …' if len(wanted) > 8 else ''})")
 
     if price_only:
         _log("주가 전용 모드 (재무지표·NCAV 건너뜀)")
