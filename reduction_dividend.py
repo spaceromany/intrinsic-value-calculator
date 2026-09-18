@@ -34,6 +34,7 @@
 import collections
 import json
 import os
+import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -90,15 +91,31 @@ class DartRequestFailed(Exception):
     """네트워크·파싱 실패. 원인 URL을 담지 않는다 — 쿼리스트링에 인증키가 들어 있다."""
 
 
+# 요청 예절. 정상일 때는 요청 사이 0.2초만 쉬고, 실패하면 1.5→4→10초로 물러난다
+# (지수 백오프). 대기에 ±30% 지터를 섞어 워커들이 같은 순간에 다시 몰리지 않게 한다.
+# 워커 6개가 고정 1.5초 간격으로 재시도하다 opendart가 IP를 차단한 뒤(2026-09-18) 넣었다.
+# 고정 간격 재시도는 서버가 바쁠 때 요청을 줄이기는커녕 두 배로 만든다.
+REQUEST_DELAY = float(os.getenv('REDUCTION_REQUEST_DELAY', '0.2'))
+BACKOFF_SECONDS = (1.5, 4.0, 10.0)
+BACKOFF_JITTER = 0.3
+
+
+def _backoff_sleep(base):
+    time.sleep(base * random.uniform(1 - BACKOFF_JITTER, 1 + BACKOFF_JITTER))
+
+
 def _dart(endpoint, **params):
     """OpenDART 호출. status 000이면 list를, 013(데이터 없음)이면 None을 돌려준다.
 
     한도 초과·키 오류는 예외로 올려 실행을 멈춘다. 계속 두드리면 하루치 한도만 태운다.
-    일시적 접속 오류는 한 번 더 시도한다. requests 예외 메시지에는 요청 URL이
+    접속 오류는 지수 백오프로 최대 4회 시도한다. requests 예외 메시지에는 요청 URL이
     통째로 들어가는데 그 안에 crtfc_key가 있으므로, 그대로 올리지 않고 종류만 남긴다.
     """
     last = None
-    for attempt in range(2):
+    attempts = len(BACKOFF_SECONDS) + 1
+    for attempt in range(attempts):
+        if REQUEST_DELAY > 0:
+            time.sleep(REQUEST_DELAY)
         try:
             resp = requests.get(DART + endpoint, params=dict(crtfc_key=DART_API_KEY, **params),
                                 timeout=REQUEST_TIMEOUT)
@@ -106,10 +123,10 @@ def _dart(endpoint, **params):
             break
         except (requests.RequestException, ValueError) as e:
             last = type(e).__name__
-            if attempt == 0:
-                time.sleep(1.5)
+            if attempt < len(BACKOFF_SECONDS):
+                _backoff_sleep(BACKOFF_SECONDS[attempt])
     else:
-        raise DartRequestFailed('%s (%s)' % (endpoint, last))
+        raise DartRequestFailed('%s (%s, %d회 시도)' % (endpoint, last, attempts))
     status = data.get('status')
     if status == '000':
         return data.get('list') or []
