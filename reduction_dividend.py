@@ -51,7 +51,8 @@ RESULTS_FILE = 'reduction_dividend_results.json'
 # 사업보고서는 연 1회라 30일 주기로 충분하다. 재무제표가 아예 없는 종목은 7일 뒤 재시도.
 REFRESH_SECONDS = int(os.getenv('REDUCTION_REFRESH_SECONDS', str(30 * 86400)))
 RETRY_SECONDS = int(os.getenv('REDUCTION_RETRY_SECONDS', str(7 * 86400)))
-WORKERS = int(os.getenv('REDUCTION_WORKERS', '6'))
+# opendart는 무거운 fnlttSinglAcntAll을 6개 워커로 두드리자 IP를 차단했다(2026-09-18).
+WORKERS = int(os.getenv('REDUCTION_WORKERS', '4'))
 CHUNK = int(os.getenv('REDUCTION_CHUNK', '50'))
 # 몇 묶음마다 Supabase에 중간 업로드할지. 전 종목 백필은 수십 분~수 시간이라
 # 끝에서만 올리면 중간에 죽었을 때(한도·타임아웃·네트워크) 올라간 게 하나도 없다.
@@ -73,7 +74,10 @@ TRANSFER_RE = re.compile(_RESERVE + '.*' + _VERB + '|(이입|전입|대체|전�
 # 배당, 손익, 기초/기말 합계 행, 그리고 '자본금'이 들어가면 무상증자(잉여금 → 자본금) 방향.
 EXCLUDE_WORDS = ('자기주식', '기타포괄', '자본금', '배당', '순이익', '순손실', '기초', '기말',
                  '자본총계', '총계', '지분법', '재측정', '연결실체', '종속', '합병', '분할',
-                 '재분류', '분류')   # 계정재분류(SK디스커버리 2023)는 준비금 감액이 아니다
+                 '재분류', '분류',   # 계정재분류(SK디스커버리 2023)는 준비금 감액이 아니다
+                 # 소계·합계 행은 전입 행의 효과를 포함해 같은 쌍으로 보인다(에코프로 2024
+                 # '소유주와의 거래로 인한 증가(감소), 자본'). 그룹 내 자본거래도 감액이 아니다.
+                 '소유주와의 거래', '합계', '증가(감소)', '소계', '연결기업', '자본거래', '내부거래')
 # 자본 구성요소 열 이름에서 '준비금 쪽'으로 볼 단서
 _SURPLUS_COL = ('자본잉여금', '주식발행초과금', '자본준비금', '준비금')
 
@@ -270,6 +274,9 @@ def summarize(record):
     years_with_transfer = sorted(_year_of(y) for y, t in transfers.items() if t and sum(t.values()) > 0)
     record['has_reduction'] = bool(years_with_transfer)
     record['total_transferred'] = sum(sum(t.values()) for t in transfers.values())
+    # 결손금 보전(상법 460조)도 같은 이동이라 잡히지만 세법상 비과세 재원 인정이
+    # 다를 수 있다. 화면에서 구분할 수 있게 표식을 남긴다.
+    record['has_deficit_cover'] = any('결손' in n for t in transfers.values() for n in t)
 
     # 직전년도 배당: 최신 연도부터 내려가며 양수인 첫 값
     last_div = last_div_year = None
