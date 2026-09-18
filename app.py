@@ -478,12 +478,16 @@ def reduction_dividend():
     """감액배당 실시 기업 목록. 남은 감액배당 가능 연수가 큰 순.
 
     ?complete=true  이력 집계가 끝나 재원·연수가 계산된 종목만
+    ?dividend=X     배당수익률 X% 이상만. 남은 연수 = 재원 ÷ 배당이라, 배당을 거의
+                    안 주는 회사가 수백 년으로 상위를 독식한다(지씨셀 295년·15억).
+                    화면 기본값은 1%.
     ?limit=N        기본 50
     """
     try:
         data = [r for r in get_reduction_data()
                 if r.get('has_reduction') and not r.get('no_data')]
         complete_only = request.args.get('complete', 'false').lower() == 'true'
+        dividend_filter = request.args.get('dividend', type=float)
         limit = request.args.get('limit', default=50, type=int)
         if complete_only:
             data = [r for r in data if r.get('remaining_years') is not None]
@@ -491,6 +495,12 @@ def reduction_dividend():
         # 안전마진 결과에서 현재가·배당수익률을 합친다
         margin_data, _ = get_results_data()
         margin = {s['code']: s for s in margin_data} if margin_data else {}
+
+        if dividend_filter is not None:
+            def _yield(r):
+                y = margin.get(r['code'], {}).get('dividend_yield')
+                return y if isinstance(y, (int, float)) and not math.isnan(y) else None
+            data = [r for r in data if (_yield(r) or 0) >= dividend_filter and _yield(r) is not None]
 
         def _key(r):
             ry = r.get('remaining_years')

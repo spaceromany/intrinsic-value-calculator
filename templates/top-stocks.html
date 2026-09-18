@@ -138,6 +138,19 @@
         <div class="mb-4 p-3 bg-light rounded" id="reductionFilterSection" style="display: none;">
             <div class="d-flex flex-wrap align-items-center gap-3">
                 <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">배당수익률:</h6>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary" data-reduction-dividend="" onclick="filterReductionByDividend(null)">전체</button>
+                        <button type="button" class="btn btn-outline-primary active" data-reduction-dividend="1" onclick="filterReductionByDividend(1)">1% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-dividend="2" onclick="filterReductionByDividend(2)">2% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-dividend="3" onclick="filterReductionByDividend(3)">3% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-dividend="5" onclick="filterReductionByDividend(5)">5% 이상</button>
+                    </div>
+                    <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip"
+                       title="남은 연수 = 남은 재원 ÷ 직전년도 배당총액이라, 배당을 거의 주지 않는 회사가 수백 년으로 상위를 차지합니다. 기본으로 배당수익률 1% 이상만 보입니다."
+                       style="cursor: pointer; color: #6c757d;"></i>
+                </div>
+                <div class="d-flex align-items-center">
                     <h6 class="mb-0 me-3 fw-bold">표시:</h6>
                     <div class="btn-group">
                         <button type="button" class="btn btn-outline-primary active" data-reduction-complete="false" onclick="filterReductionComplete(false)">감액 이력 전체</button>
@@ -240,6 +253,7 @@ let currentDividendFilter = null;
 let currentSortMode = 'margin'; // 'margin' | 'ncav' | 'reduction'
 let currentReductionLimit = 50;
 let currentReductionCompleteOnly = false;
+let currentReductionDividendFilter = 1;   // 기본 1% 이상. null이면 전체
 let currentNcavFilter = null;
 let currentNcavLimit = 30;
 let currentNcavDividendFilter = null;
@@ -495,6 +509,14 @@ function setSortMode(mode) {
     }
 }
 
+function filterReductionByDividend(minYield) {
+    currentReductionDividendFilter = minYield;
+    document.querySelectorAll('[data-reduction-dividend]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-reduction-dividend="${minYield === null ? '' : minYield}"]`);
+    if (sel) sel.classList.add('active');
+    loadReductionStocks();
+}
+
 function filterReductionComplete(onlyComplete) {
     currentReductionCompleteOnly = onlyComplete;
     document.querySelectorAll('[data-reduction-complete]').forEach(btn => btn.classList.remove('active'));
@@ -534,6 +556,7 @@ function transferLines(r) {
 async function loadReductionStocks() {
     let url = `/reduction-dividend?limit=${currentReductionLimit}`;
     if (currentReductionCompleteOnly) url += '&complete=true';
+    if (currentReductionDividendFilter !== null) url += `&dividend=${currentReductionDividendFilter}`;
     const grid = document.getElementById('stocksGrid');
     try {
         const response = await fetch(url);
@@ -543,7 +566,7 @@ async function loadReductionStocks() {
         if (summary) summary.textContent = `감액 이력 ${data.total || 0}개 종목 · 재원 계산 완료 ${data.complete_count || 0}개`;
         grid.innerHTML = '';
         if (stocks.length === 0) {
-            grid.innerHTML = '<div class="col-12 text-center text-muted mt-3">감액배당 이력이 집계된 종목이 아직 없습니다. 크롤러가 DART 자본변동표를 백필하는 중일 수 있습니다.</div>';
+            grid.innerHTML = '<div class="col-12 text-center text-muted mt-3">조건에 맞는 종목이 없습니다. 배당수익률 필터를 "전체"로 바꾸거나, 크롤러가 DART 자본변동표를 백필하는 중일 수 있습니다.</div>';
             return;
         }
         stocks.forEach((stock, i) => {
