@@ -53,6 +53,9 @@ REFRESH_SECONDS = int(os.getenv('REDUCTION_REFRESH_SECONDS', str(30 * 86400)))
 RETRY_SECONDS = int(os.getenv('REDUCTION_RETRY_SECONDS', str(7 * 86400)))
 WORKERS = int(os.getenv('REDUCTION_WORKERS', '6'))
 CHUNK = int(os.getenv('REDUCTION_CHUNK', '50'))
+# 몇 묶음마다 Supabase에 중간 업로드할지. 전 종목 백필은 수십 분~수 시간이라
+# 끝에서만 올리면 중간에 죽었을 때(한도·타임아웃·네트워크) 올라간 게 하나도 없다.
+UPLOAD_EVERY_CHUNKS = int(os.getenv('REDUCTION_UPLOAD_EVERY_CHUNKS', '4'))
 # 감액배당은 2020년 쌍용C&E 무렵부터 본격화됐다. 이보다 앞선 전입은 드물다.
 HISTORY_FROM = int(os.getenv('REDUCTION_HISTORY_FROM', '2020'))
 
@@ -474,10 +477,13 @@ def calculate_reduction_dividend_screening(time_budget_seconds=None):
             done += 1
             if rec.get('has_reduction'):
                 detected += 1
-        _save(list(results.values()), upload=False)
+        chunk_no = start // CHUNK + 1
+        checkpoint = done > 0 and chunk_no % UPLOAD_EVERY_CHUNKS == 0
+        _save(list(results.values()), upload=checkpoint)
         elapsed = int(time.monotonic() - started_at)
-        print("💾 감액배당 [%d/%d] %d초, 누적 %d개 처리 / 감액 이력 %d개"
-              % (min(start + CHUNK, len(targets)), len(targets), elapsed, done, detected), flush=True)
+        print("💾 감액배당 [%d/%d] %d초, 누적 %d개 처리 / 감액 이력 %d개%s"
+              % (min(start + CHUNK, len(targets)), len(targets), elapsed, done, detected,
+                 ' (중간 업로드)' if checkpoint else ''), flush=True)
         if quota_hit:
             print("🛑 DART 요청 한도 초과 → 이번 실행 중단 (다음 실행이 이어받음)", flush=True)
             break
