@@ -375,7 +375,7 @@ function reductionDetailItems(stock) {
     const ry = r.remaining_years;
     return `
         <div class="detail-item">
-            <span class="detail-label">감액배당 실시</span>
+            <span class="detail-label">감액배당 실시${r.has_deficit_cover ? ' <small class="text-muted">(결손보전 포함)</small>' : ''}</span>
             <span class="detail-value">${years || '-'}</span>
         </div>
         <div class="detail-item">

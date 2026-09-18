@@ -151,7 +151,7 @@ _REDUCTION_VIEW_KEYS = (
     'has_reduction', 'history_complete', 'transfers', 'transfer_accounts',
     'total_transferred', 'first_transfer_year', 'dividends_since_first',
     'remaining_fund', 'remaining_years', 'last_dividend', 'last_dividend_year',
-    'legal_cap', 'capital_year', 'latest_fy',
+    'legal_cap', 'capital_year', 'latest_fy', 'has_deficit_cover',
 )
 
 

@@ -572,6 +572,7 @@ async function loadReductionStocks() {
                         <p class="card-text mb-2">
                             남은 감액배당 가능 연수:
                             <span class="badge ${badgeClass}">${badgeText}</span>
+                            ${stock.has_deficit_cover ? '<span class="badge bg-light text-dark border ms-1" title="자본잉여금으로 결손금을 메운 전입이 포함됩니다(상법 460조). 세법상 비과세 재원 인정이 다를 수 있습니다.">결손보전 포함</span>' : ''}
                             ${stock.history_complete ? '' : '<small class="text-muted ms-1">이력 집계 중</small>'}
                         </p>
                         <div id="details-reduction-${stock.code}" class="stock-details">
