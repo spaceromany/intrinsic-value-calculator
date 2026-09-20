@@ -617,8 +617,8 @@ async function loadReductionStocks() {
                                 <span class="detail-value">${fmtWon(stock.total_usable)}</span>
                             </div>` : ''}
                             <div class="detail-item">
-                                <span class="detail-label">그 이후 배당 누계</span>
-                                <span class="detail-value">${fmtWon(stock.dividends_since_first)}</span>
+                                <span class="detail-label">재원에서 지급된 배당 <small class="text-muted">(추정)</small></span>
+                                <span class="detail-value">${fmtWon(stock.dividends_charged !== undefined ? stock.dividends_charged : stock.dividends_since_first)}</span>
                             </div>
                             <div class="detail-item">
                                 <span class="detail-label">남은 감액배당 재원 (추정)</span>

@@ -64,6 +64,8 @@ UPLOAD_EVERY_CHUNKS = int(os.getenv('REDUCTION_UPLOAD_EVERY_CHUNKS', '4'))
 FAILURE_STREAK_LIMIT = int(os.getenv('REDUCTION_FAILURE_STREAK_LIMIT', '20'))
 # 감액배당은 2020년 쌍용C&E 무렵부터 본격화됐다. 이보다 앞선 전입은 드물다.
 HISTORY_FROM = int(os.getenv('REDUCTION_HISTORY_FROM', '2020'))
+# summarize() 계산식의 버전. 바뀌면 감액 회사 레코드를 다시 계산한다(재조회는 거의 없음).
+SUMMARY_VERSION = 2
 
 DART = 'https://opendart.fss.or.kr/api/'
 
@@ -362,16 +364,36 @@ def summarize(record):
         record['remaining_years'] = None
         return record
 
+    # 연도순 풀. Y년에 전입한 재원은 FY Y 배당(Y+1년 지급)부터 쓸 수 있다 — 감액배당은
+    # 전입 후 1년 뒤부터 비과세 배당이 가능하고, FY Y−1 결산배당은 전입과 같은 주총에서
+    # 결의되지만 Y−1년 말 배당가능이익에서 나온다. 그래서 전입을 한 덩어리로 합쳐
+    # 첫 전입 연도 이후 배당을 통째로 빼면 안 된다. 메가스터디: 2025년 50억 전입은
+    # FY2025 배당 150억에 소진됐지만, 2026년 61억은 아직 배당이 없어 그대로 남는다.
     first = years_with_transfer[0]
-    paid = 0
-    if dividends:
-        last_year = max(int(k) for k in dividends)
-        paid = sum((dividends.get(str(y)) or 0) for y in range(first, last_year + 1))
-    remaining = max(record['total_usable'] - paid, 0)
+    usable_by_year = collections.defaultdict(int)
+    for key, amount in usable.items():
+        usable_by_year[_year_of(key)] += amount
+    div_years = [int(k) for k in dividends]
+    last_div_year = max(div_years) if div_years else first - 1
+
+    pool = 0
+    charged = 0
+    for y in range(first, max(last_div_year, first) + 1):
+        pool += usable_by_year.get(y, 0)
+        d = dividends.get(str(y)) or 0
+        use = min(pool, d)
+        pool -= use
+        charged += use
+    # 마지막 배당 연도 뒤의 전입(올해 분기보고서분 등)은 아직 아무 배당도 쓰지 않았다
+    pool += sum(v for y, v in usable_by_year.items() if y > max(last_div_year, first))
+
     record['first_transfer_year'] = first
-    record['dividends_since_first'] = paid
-    record['remaining_fund'] = remaining
-    record['remaining_years'] = round(remaining / last_div, 1) if last_div else None
+    record['dividends_since_first'] = sum((dividends.get(str(y)) or 0)
+                                          for y in range(first, last_div_year + 1)) if div_years else 0
+    record['dividends_charged'] = charged
+    record['remaining_fund'] = pool
+    record['remaining_years'] = round(pool / last_div, 1) if last_div else None
+    record['summary_version'] = SUMMARY_VERSION
     return record
 
 
@@ -537,7 +559,8 @@ def calculate_reduction_dividend_screening(time_budget_seconds=None):
                 stale = (not rec.get('history_complete')) or rec.get('latest_fy') != latest_fy
                 # 결손 차감 도입 전 레코드: 감액 회사만 다시 스캔해 이익잉여금을 채운다
                 if rec.get('has_reduction') and ('retained_earnings' not in rec
-                                                  or 'retained_earnings_ofs' not in rec):
+                                                  or 'retained_earnings_ofs' not in rec
+                                                  or rec.get('summary_version') != SUMMARY_VERSION):
                     stale = True
                 if age < limit and not stale:
                     continue
