@@ -225,6 +225,17 @@ def extract_transfers(rows):
     return out
 
 
+def extract_retained_earnings(rows):
+    """재무상태표의 이익잉여금(결손금). 음수면 결손. 없으면 None."""
+    for it in rows or []:
+        if it.get('sj_div') != 'BS':
+            continue
+        name = (it.get('account_nm') or '').strip()
+        if it.get('account_id') == 'ifrs-full_RetainedEarnings' or name.startswith('이익잉여금'):
+            return _amount(it.get('thstrm_amount'))
+    return None
+
+
 def extract_capital(rows):
     """재무상태표에서 자본금·자본잉여금을 뽑아 법적 감액 가능 한도를 계산한다.
 
@@ -291,6 +302,33 @@ def summarize(record):
     years_with_transfer = sorted(_year_of(y) for y, t in transfers.items() if t and sum(t.values()) > 0)
     record['has_reduction'] = bool(years_with_transfer)
     record['total_transferred'] = sum(sum(t.values()) for t in transfers.values())
+
+    # 결손보전 차감. 준비금을 결손 보전에 쓰면 그만큼은 소모되어 배당재원이 되지
+    # 않는다(상법 460조). 배당 여지는 직전연도말 결손을 초과한 부분만이다.
+    # 케이티알파 1,610억 vs 결손 67억 → 1,543억, 한화오션 2.63조 vs 결손 3.0조 → 0.
+    # 직전연도 이익잉여금을 모르면 차감하지 않고 그 연도를 deficit_unknown에 남긴다.
+    retained = record.get('retained_earnings') or {}
+    usable = {}
+    covered = {}
+    unknown = []
+    for key, t in transfers.items():
+        amount = sum(t.values())
+        if amount <= 0:
+            continue
+        prev = retained.get(str(_year_of(key) - 1))
+        if prev is None:
+            unknown.append(key)
+            usable[key] = amount
+            continue
+        deficit = -prev if prev < 0 else 0
+        used = min(amount, deficit)
+        covered[key] = used
+        usable[key] = amount - used
+    record['usable_transfers'] = usable
+    record['deficit_covered'] = covered
+    record['deficit_unknown'] = sorted(unknown)
+    record['total_deficit_covered'] = sum(covered.values())
+    record['total_usable'] = sum(usable.values())
     # 결손금 보전(상법 460조)도 같은 이동이라 잡히지만 세법상 비과세 재원 인정이
     # 다를 수 있다. 화면에서 구분할 수 있게 표식을 남긴다.
     record['has_deficit_cover'] = any('결손' in n for t in transfers.values() for n in t)
@@ -317,7 +355,7 @@ def summarize(record):
     if dividends:
         last_year = max(int(k) for k in dividends)
         paid = sum((dividends.get(str(y)) or 0) for y in range(first, last_year + 1))
-    remaining = max(record['total_transferred'] - paid, 0)
+    remaining = max(record['total_usable'] - paid, 0)
     record['first_transfer_year'] = first
     record['dividends_since_first'] = paid
     record['remaining_fund'] = remaining
@@ -336,6 +374,7 @@ def _scan_company(code, corp_code, name, existing, latest_fy, current_time):
     rec.setdefault('transfers', {})
     rec.setdefault('dividends', {})
     rec.setdefault('transfer_accounts', {})
+    rec.setdefault('retained_earnings', {})
     scanned = set(rec.get('scanned_years') or [])
     got_any_statement = bool(rec.get('capital_year'))
 
@@ -348,6 +387,9 @@ def _scan_company(code, corp_code, name, existing, latest_fy, current_time):
             scanned.add(year)
             continue
         got_any_statement = True
+        re_bal = extract_retained_earnings(rows)
+        if re_bal is not None:
+            rec['retained_earnings'][str(year)] = re_bal
         transfers = extract_transfers(rows)
         if transfers:
             rec['transfers'][str(year)] = transfers
@@ -384,6 +426,17 @@ def _scan_company(code, corp_code, name, existing, latest_fy, current_time):
                 rec['transfer_accounts'].pop(key, None)
             rec['quarterly_report'] = reprt
             break
+
+    # 전입이 있는데 직전연도 이익잉여금이 없으면(2020년 전입 → 2019년) 그 한 해만 보충 조회.
+    # 결손 차감 여부를 판단하려면 전입 직전의 결손 규모가 필요하다.
+    for key in list(rec['transfers']):
+        prev_year = int(str(key).rstrip('Q')) - 1
+        if str(prev_year) in rec['retained_earnings'] or prev_year < HISTORY_FROM - 3:
+            continue
+        rows = fetch_statements(corp_code, prev_year)
+        re_bal = extract_retained_earnings(rows) if rows else None
+        if re_bal is not None:
+            rec['retained_earnings'][str(prev_year)] = re_bal
 
     rec['scanned_years'] = sorted(scanned)
     rec['history_complete'] = all(y in scanned for y in range(HISTORY_FROM, latest_fy + 1))
@@ -462,6 +515,9 @@ def calculate_reduction_dividend_screening(time_budget_seconds=None):
                 limit = RETRY_SECONDS if rec.get('no_data') else REFRESH_SECONDS
                 # 이력이 덜 모였거나 새 사업연도가 나왔으면 주기와 무관하게 다시 본다
                 stale = (not rec.get('history_complete')) or rec.get('latest_fy') != latest_fy
+                # 결손 차감 도입 전 레코드: 감액 회사만 다시 스캔해 이익잉여금을 채운다
+                if rec.get('has_reduction') and 'retained_earnings' not in rec:
+                    stale = True
                 if age < limit and not stale:
                     continue
             except ValueError:

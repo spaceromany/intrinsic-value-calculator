@@ -607,6 +607,15 @@ async function loadReductionStocks() {
                                 <span class="detail-label">전입 합계</span>
                                 <span class="detail-value">${fmtWon(stock.total_transferred)}</span>
                             </div>
+                            ${stock.total_deficit_covered ? `
+                            <div class="detail-item">
+                                <span class="detail-label">결손보전으로 소모 <small class="text-muted">(배당재원 아님)</small></span>
+                                <span class="detail-value text-danger">−${fmtWon(stock.total_deficit_covered)}</span>
+                            </div>
+                            <div class="detail-item">
+                                <span class="detail-label">사용 가능 재원</span>
+                                <span class="detail-value">${fmtWon(stock.total_usable)}</span>
+                            </div>` : ''}
                             <div class="detail-item">
                                 <span class="detail-label">그 이후 배당 누계</span>
                                 <span class="detail-value">${fmtWon(stock.dividends_since_first)}</span>
