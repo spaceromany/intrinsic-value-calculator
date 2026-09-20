@@ -161,10 +161,22 @@ def _reduction_view(rec):
     return {k: rec.get(k) for k in _REDUCTION_VIEW_KEYS}
 
 
-def _reduction_index():
-    """종목코드 → 감액 이력이 있는 레코드. 없는 종목은 넣지 않는다."""
+def _is_reit(name):
+    """상장 리츠 판별. 리츠는 예외 없이 종목명이 '리츠'로 끝난다(롯데리츠, ESR켄달스퀘어리츠).
+    '메리츠금융지주'처럼 중간에 든 경우는 리츠가 아니므로 endswith로 본다.
+
+    리츠는 감액배당 재원 지표에 맞지 않는다. 매년 수십억을 주식발행초과금에서 옮겨
+    (감가상각 결손 보전) 수백억을 배당하는 연간 반복 구조라, 일회성 재원 소진 모델로는
+    항상 0이 나온다. 목록·카드에서 뺀다(?include_reits=true 로는 볼 수 있다).
+    """
+    return (name or '').strip().endswith('리츠')
+
+
+def _reduction_index(include_reits=False):
+    """종목코드 → 감액 이력이 있는 레코드. 없는 종목은 넣지 않는다. 리츠는 기본 제외."""
     return {r['code']: r for r in get_reduction_data()
-            if r.get('has_reduction') and not r.get('no_data')}
+            if r.get('has_reduction') and not r.get('no_data')
+            and (include_reits or not _is_reit(r.get('name')))}
 
 
 def _attach_reduction(stocks):
@@ -483,11 +495,12 @@ def reduction_dividend():
     ?dividend=X     배당수익률 X% 이상만. 남은 연수 = 재원 ÷ 배당이라, 배당을 거의
                     안 주는 회사가 수백 년으로 상위를 독식한다(지씨셀 295년·15억).
                     화면 기본값은 1%.
+    ?include_reits=true  리츠 포함. 기본은 제외(_is_reit 참고).
     ?limit=N        기본 50
     """
     try:
-        data = [r for r in get_reduction_data()
-                if r.get('has_reduction') and not r.get('no_data')]
+        include_reits = request.args.get('include_reits', 'false').lower() == 'true'
+        data = list(_reduction_index(include_reits).values())
         complete_only = request.args.get('complete', 'false').lower() == 'true'
         dividend_filter = request.args.get('dividend', type=float)
         limit = request.args.get('limit', default=50, type=int)
