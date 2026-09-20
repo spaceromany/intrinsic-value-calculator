@@ -307,15 +307,26 @@ def summarize(record):
     # 않는다(상법 460조). 배당 여지는 직전연도말 결손을 초과한 부분만이다.
     # 케이티알파 1,610억 vs 결손 67억 → 1,543억, 한화오션 2.63조 vs 결손 3.0조 → 0.
     # 직전연도 이익잉여금을 모르면 차감하지 않고 그 연도를 deficit_unknown에 남긴다.
+    # 이익잉여금은 별도재무제표 값을 우선 쓴다. 상법상 준비금·배당가능이익은 법인
+    # 단위라 연결 결손으로 차감하면 어긋난다(알테오젠 2021말 연결 −329억 vs 별도 −115억).
+    # 별도가 없으면 연도 루프에서 받아 둔 값(연결 우선)으로 폴백하고 기준을 남긴다.
     retained = record.get('retained_earnings') or {}
+    retained_ofs = record.get('retained_earnings_ofs') or {}
     usable = {}
     covered = {}
     unknown = []
+    basis = {}
     for key, t in transfers.items():
         amount = sum(t.values())
         if amount <= 0:
             continue
-        prev = retained.get(str(_year_of(key) - 1))
+        prev_key = str(_year_of(key) - 1)
+        if prev_key in retained_ofs:
+            prev, basis[key] = retained_ofs[prev_key], '별도'
+        elif prev_key in retained:
+            prev, basis[key] = retained[prev_key], '연결'
+        else:
+            prev = None
         if prev is None:
             unknown.append(key)
             usable[key] = amount
@@ -326,6 +337,7 @@ def summarize(record):
         usable[key] = amount - used
     record['usable_transfers'] = usable
     record['deficit_covered'] = covered
+    record['deficit_basis'] = basis
     record['deficit_unknown'] = sorted(unknown)
     record['total_deficit_covered'] = sum(covered.values())
     record['total_usable'] = sum(usable.values())
@@ -375,6 +387,7 @@ def _scan_company(code, corp_code, name, existing, latest_fy, current_time):
     rec.setdefault('dividends', {})
     rec.setdefault('transfer_accounts', {})
     rec.setdefault('retained_earnings', {})
+    rec.setdefault('retained_earnings_ofs', {})
     scanned = set(rec.get('scanned_years') or [])
     got_any_statement = bool(rec.get('capital_year'))
 
@@ -427,16 +440,23 @@ def _scan_company(code, corp_code, name, existing, latest_fy, current_time):
             rec['quarterly_report'] = reprt
             break
 
-    # 전입이 있는데 직전연도 이익잉여금이 없으면(2020년 전입 → 2019년) 그 한 해만 보충 조회.
-    # 결손 차감 여부를 판단하려면 전입 직전의 결손 규모가 필요하다.
+    # 전입 연도의 직전연도 이익잉여금은 별도재무제표로 한 번 더 받는다(전입 연도당 1회).
+    # 결손 차감은 법인 단위(별도) 결손이 기준이다. 별도가 없으면 연결(연도 루프 값,
+    # 없으면 여기서 보충)으로 폴백한다. 2020년 전입 → 2019년처럼 범위 밖이면 그 해만 조회.
     for key in list(rec['transfers']):
         prev_year = int(str(key).rstrip('Q')) - 1
-        if str(prev_year) in rec['retained_earnings'] or prev_year < HISTORY_FROM - 3:
+        if prev_year < HISTORY_FROM - 3:
             continue
-        rows = fetch_statements(corp_code, prev_year)
-        re_bal = extract_retained_earnings(rows) if rows else None
-        if re_bal is not None:
-            rec['retained_earnings'][str(prev_year)] = re_bal
+        if str(prev_year) not in rec['retained_earnings_ofs']:
+            rows = fetch_statements(corp_code, prev_year, fs_div='OFS')
+            re_bal = extract_retained_earnings(rows) if rows else None
+            if re_bal is not None:
+                rec['retained_earnings_ofs'][str(prev_year)] = re_bal
+        if str(prev_year) not in rec['retained_earnings'] and str(prev_year) not in rec['retained_earnings_ofs']:
+            rows = fetch_statements(corp_code, prev_year)
+            re_bal = extract_retained_earnings(rows) if rows else None
+            if re_bal is not None:
+                rec['retained_earnings'][str(prev_year)] = re_bal
 
     rec['scanned_years'] = sorted(scanned)
     rec['history_complete'] = all(y in scanned for y in range(HISTORY_FROM, latest_fy + 1))
@@ -516,7 +536,8 @@ def calculate_reduction_dividend_screening(time_budget_seconds=None):
                 # 이력이 덜 모였거나 새 사업연도가 나왔으면 주기와 무관하게 다시 본다
                 stale = (not rec.get('history_complete')) or rec.get('latest_fy') != latest_fy
                 # 결손 차감 도입 전 레코드: 감액 회사만 다시 스캔해 이익잉여금을 채운다
-                if rec.get('has_reduction') and 'retained_earnings' not in rec:
+                if rec.get('has_reduction') and ('retained_earnings' not in rec
+                                                  or 'retained_earnings_ofs' not in rec):
                     stale = True
                 if age < limit and not stale:
                     continue

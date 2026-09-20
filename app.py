@@ -152,7 +152,7 @@ _REDUCTION_VIEW_KEYS = (
     'total_transferred', 'first_transfer_year', 'dividends_since_first',
     'remaining_fund', 'remaining_years', 'last_dividend', 'last_dividend_year',
     'legal_cap', 'capital_year', 'latest_fy', 'has_deficit_cover',
-    'total_usable', 'total_deficit_covered', 'deficit_unknown',
+    'total_usable', 'total_deficit_covered', 'deficit_unknown', 'deficit_basis',
 )
 
 
