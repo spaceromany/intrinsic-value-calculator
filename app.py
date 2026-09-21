@@ -291,6 +291,16 @@ def filter_stocks():
                     continue
             stocks = filtered_stocks
             #print(f"배당수익률 필터링 후 {len(stocks)}개 종목 남음")
+
+        # 감액배당 재원이 남은 종목만(?reduction=true). 상위 N개를 자르기 전에 걸러야
+        # "안전마진 상위 중 감액 회사"가 아니라 "감액 회사 중 안전마진 상위"가 된다.
+        # 남은 연수 > 0 기준(재원이 남았고 배당도 주는 회사), 리츠 제외, 우선주는 보통주 이력.
+        if request.args.get('reduction', 'false').lower() == 'true':
+            idx = _reduction_index()
+            def _rec(code):
+                return idx.get(code) or (idx.get(code[:-1] + '0') if code and code[-1] != '0' else None)
+            stocks = [s for s in stocks
+                      if ((_rec(s.get('code', '')) or {}).get('remaining_years') or 0) > 0]
         
         # 상위 N개 종목 반환
         limit = request.args.get('limit', default=30, type=int)
@@ -498,6 +508,8 @@ def reduction_dividend():
                     안 주는 회사가 수백 년으로 상위를 독식한다(지씨셀 295년·15억).
                     화면 기본값은 1%.
     ?include_reits=true  리츠 포함. 기본은 제외(_is_reit 참고).
+    ?margin=X       안전마진 X% 이상만. 감액 재원이 남은 회사 중 내재가치 대비 저평가된
+                    곳을 고르기 위한 것. 값이 없거나 NaN이면 제외.
     ?limit=N        기본 50
     """
     try:
@@ -506,6 +518,7 @@ def reduction_dividend():
         complete_only = request.args.get('complete', 'false').lower() == 'true'
         positive_only = request.args.get('positive', 'false').lower() == 'true'
         dividend_filter = request.args.get('dividend', type=float)
+        margin_filter = request.args.get('margin', type=float)
         limit = request.args.get('limit', default=50, type=int)
         if complete_only:
             data = [r for r in data if r.get('remaining_years') is not None]
@@ -516,11 +529,16 @@ def reduction_dividend():
         margin_data, _ = get_results_data()
         margin = {s['code']: s for s in margin_data} if margin_data else {}
 
+        def _num(r, key):
+            v = margin.get(r['code'], {}).get(key)
+            return v if isinstance(v, (int, float)) and not math.isnan(v) else None
+
         if dividend_filter is not None:
-            def _yield(r):
-                y = margin.get(r['code'], {}).get('dividend_yield')
-                return y if isinstance(y, (int, float)) and not math.isnan(y) else None
-            data = [r for r in data if (_yield(r) or 0) >= dividend_filter and _yield(r) is not None]
+            data = [r for r in data if _num(r, 'dividend_yield') is not None
+                    and _num(r, 'dividend_yield') >= dividend_filter]
+        if margin_filter is not None:
+            data = [r for r in data if _num(r, 'safety_margin') is not None
+                    and _num(r, 'safety_margin') >= margin_filter]
 
         def _key(r):
             ry = r.get('remaining_years')

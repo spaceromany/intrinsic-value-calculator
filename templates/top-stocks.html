@@ -96,6 +96,17 @@
 
                 <!-- 배당수익률 필터 -->
                 <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">감액배당:</h6>
+                    <div class="btn-group">
+                        <button type="button" class="btn btn-outline-primary active" data-margin-reduction="false" onclick="filterMarginByReduction(false)">전체</button>
+                        <button type="button" class="btn btn-outline-primary" data-margin-reduction="true" onclick="filterMarginByReduction(true)">재원 남은 종목만</button>
+                    </div>
+                    <i class="fas fa-info-circle ms-2" data-bs-toggle="tooltip"
+                       title="자본준비금 감액으로 옮긴 재원이 아직 남아 있고 배당도 주는 회사만 봅니다. 상위 N개를 자르기 전에 거르므로 '감액 회사 중 안전마진 상위'가 됩니다."
+                       style="cursor: pointer; color: #6c757d;"></i>
+                </div>
+
+                <div class="d-flex align-items-center">
                     <h6 class="mb-0 me-3 fw-bold">배당수익률:</h6>
                     <!-- 데스크톱 버전: 버튼 그룹 -->
                     <div class="btn-group d-none d-md-flex">
@@ -151,6 +162,14 @@
                        style="cursor: pointer; color: #6c757d;"></i>
                 </div>
                 <div class="d-flex align-items-center">
+                    <h6 class="mb-0 me-3 fw-bold">안전마진:</h6>
+                    <div class="btn-group me-4">
+                        <button type="button" class="btn btn-outline-primary active" data-reduction-margin="" onclick="filterReductionByMargin(null)">전체</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-margin="0" onclick="filterReductionByMargin(0)">0% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-margin="30" onclick="filterReductionByMargin(30)">30% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-margin="50" onclick="filterReductionByMargin(50)">50% 이상</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-margin="100" onclick="filterReductionByMargin(100)">100% 이상</button>
+                    </div>
                     <h6 class="mb-0 me-3 fw-bold">표시 개수:</h6>
                     <div class="btn-group">
                         <button type="button" class="btn btn-outline-primary active" data-reduction-limit="50" onclick="applyReductionLimit(50)">50개</button>
@@ -243,9 +262,11 @@
 <script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
 <script>
 let currentDividendFilter = null;
+let currentMarginReductionOnly = false;   // 감액배당 재원 남은 종목만
 let currentSortMode = 'margin'; // 'margin' | 'ncav' | 'reduction'
 let currentReductionLimit = 50;
 let currentReductionDividendFilter = 1;   // 기본 1% 이상. null이면 전체
+let currentReductionMarginFilter = null;  // 안전마진 X% 이상. null이면 전체
 let currentNcavFilter = null;
 let currentNcavLimit = 30;
 let currentNcavDividendFilter = null;
@@ -263,6 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
             try {
                 const limit = document.getElementById('currentLimit').textContent;
                 let filterUrl = `/filter?limit=${limit}`;
+                if (currentMarginReductionOnly) filterUrl += '&reduction=true';
                 if (currentDividendFilter !== null) {
                     filterUrl += `&dividend=${currentDividendFilter}`;
                 }
@@ -320,6 +342,7 @@ async function loadStocks(limit) {
     }
     
     let filterUrl = `/filter?limit=${limit}`;
+    if (currentMarginReductionOnly) filterUrl += '&reduction=true';
     if (currentDividendFilter !== null) {
         filterUrl += `&dividend=${currentDividendFilter}`;
     }
@@ -366,6 +389,9 @@ function renderMarginStocks(stocks) {
 
         const ncavText = stock.ncav_ratio !== null && stock.ncav_ratio !== undefined
             ? `<small class="text-muted">NCAV/시총: ${stock.ncav_ratio.toFixed(1)}%</small>` : '';
+        const r = stock.reduction;
+        const reductionText = r && r.remaining_years > 0
+            ? `<small class="text-primary d-block">감액배당 재원 ${r.remaining_years.toFixed(1)}년 남음${r.has_deficit_cover ? ' (결손보전 포함)' : ''}</small>` : '';
 
         const col = document.createElement('div');
         col.className = 'col-12 col-sm-6 col-md-4';
@@ -387,6 +413,7 @@ function renderMarginStocks(stocks) {
                             ${Math.round(stock.safety_margin)}%
                         </span>
                         ${ncavText}
+                        ${reductionText}
                     </p>
                     <div id="details-${stock.code}" class="stock-details">
                         <div class="detail-item">
@@ -430,6 +457,14 @@ function applyFilter(limit) {
     }
     
     loadStocks(limit);
+}
+
+function filterMarginByReduction(onlyReduction) {
+    currentMarginReductionOnly = onlyReduction;
+    document.querySelectorAll('[data-margin-reduction]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-margin-reduction="${onlyReduction}"]`);
+    if (sel) sel.classList.add('active');
+    loadStocks();
 }
 
 function filterByDividend(dividend) {
@@ -501,6 +536,14 @@ function setSortMode(mode) {
     }
 }
 
+function filterReductionByMargin(minMargin) {
+    currentReductionMarginFilter = minMargin;
+    document.querySelectorAll('[data-reduction-margin]').forEach(btn => btn.classList.remove('active'));
+    const sel = document.querySelector(`[data-reduction-margin="${minMargin === null ? '' : minMargin}"]`);
+    if (sel) sel.classList.add('active');
+    loadReductionStocks();
+}
+
 function filterReductionByDividend(minYield) {
     currentReductionDividendFilter = minYield;
     document.querySelectorAll('[data-reduction-dividend]').forEach(btn => btn.classList.remove('active'));
@@ -541,6 +584,7 @@ async function loadReductionStocks() {
     // 남은 연수 > 0 (재원이 남았고 배당도 주는 회사)만. 소진·무배당은 볼 이유가 없어 토글을 두지 않는다.
     let url = `/reduction-dividend?limit=${currentReductionLimit}&positive=true`;
     if (currentReductionDividendFilter !== null) url += `&dividend=${currentReductionDividendFilter}`;
+    if (currentReductionMarginFilter !== null) url += `&margin=${currentReductionMarginFilter}`;
     const grid = document.getElementById('stocksGrid');
     try {
         const response = await fetch(url);
@@ -617,8 +661,8 @@ async function loadReductionStocks() {
                                 <span class="detail-value">${fmtWon(stock.legal_cap)}</span>
                             </div>
                             <div class="detail-item">
-                                <span class="detail-label">현재가 / 배당수익률</span>
-                                <span class="detail-value">${stock.current_price ? Math.round(stock.current_price).toLocaleString() + '원' : '-'} / ${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'}</span>
+                                <span class="detail-label">현재가 / 배당수익률 / 안전마진</span>
+                                <span class="detail-value">${stock.current_price ? Math.round(stock.current_price).toLocaleString() + '원' : '-'} / ${stock.dividend_yield ? stock.dividend_yield.toFixed(2) + '%' : '-'} / <span class="${(stock.safety_margin || 0) >= 0 ? 'text-success' : 'text-danger'}">${stock.safety_margin !== null && stock.safety_margin !== undefined ? Math.round(stock.safety_margin) + '%' : '-'}</span></span>
                             </div>
                         </div>
                     </div>
