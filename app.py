@@ -491,7 +491,9 @@ def ncav_filter():
 def reduction_dividend():
     """감액배당 실시 기업 목록. 남은 감액배당 가능 연수가 큰 순.
 
-    ?complete=true  이력 집계가 끝나 재원·연수가 계산된 종목만
+    ?positive=true  남은 연수 > 0 인 종목만 (재원이 남았고 배당도 주는 회사). 화면 기본.
+                    무배당(연수 없음)·소진(0년)은 빠진다.
+    ?complete=true  (구) 연수가 계산된 종목만. 하위 호환.
     ?dividend=X     배당수익률 X% 이상만. 남은 연수 = 재원 ÷ 배당이라, 배당을 거의
                     안 주는 회사가 수백 년으로 상위를 독식한다(지씨셀 295년·15억).
                     화면 기본값은 1%.
@@ -502,10 +504,13 @@ def reduction_dividend():
         include_reits = request.args.get('include_reits', 'false').lower() == 'true'
         data = list(_reduction_index(include_reits).values())
         complete_only = request.args.get('complete', 'false').lower() == 'true'
+        positive_only = request.args.get('positive', 'false').lower() == 'true'
         dividend_filter = request.args.get('dividend', type=float)
         limit = request.args.get('limit', default=50, type=int)
         if complete_only:
             data = [r for r in data if r.get('remaining_years') is not None]
+        if positive_only:
+            data = [r for r in data if (r.get('remaining_years') or 0) > 0]
 
         # 안전마진 결과에서 현재가·배당수익률을 합친다
         margin_data, _ = get_results_data()

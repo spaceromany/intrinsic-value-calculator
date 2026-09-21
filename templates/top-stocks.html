@@ -153,8 +153,8 @@
                 <div class="d-flex align-items-center">
                     <h6 class="mb-0 me-3 fw-bold">표시:</h6>
                     <div class="btn-group">
-                        <button type="button" class="btn btn-outline-primary active" data-reduction-complete="false" onclick="filterReductionComplete(false)">감액 이력 전체</button>
-                        <button type="button" class="btn btn-outline-primary" data-reduction-complete="true" onclick="filterReductionComplete(true)">재원 계산 완료만</button>
+                        <button type="button" class="btn btn-outline-primary active" data-reduction-complete="true" onclick="filterReductionComplete(true)">재원 남은 종목만</button>
+                        <button type="button" class="btn btn-outline-primary" data-reduction-complete="false" onclick="filterReductionComplete(false)">전체 (소진·무배당 포함)</button>
                     </div>
                 </div>
                 <div class="d-flex align-items-center">
@@ -252,7 +252,7 @@
 let currentDividendFilter = null;
 let currentSortMode = 'margin'; // 'margin' | 'ncav' | 'reduction'
 let currentReductionLimit = 50;
-let currentReductionCompleteOnly = false;
+let currentReductionCompleteOnly = true;   // 기본: 남은 연수 > 0 (재원이 남았고 배당도 주는 회사)
 let currentReductionDividendFilter = 1;   // 기본 1% 이상. null이면 전체
 let currentNcavFilter = null;
 let currentNcavLimit = 30;
@@ -555,7 +555,7 @@ function transferLines(r) {
 
 async function loadReductionStocks() {
     let url = `/reduction-dividend?limit=${currentReductionLimit}`;
-    if (currentReductionCompleteOnly) url += '&complete=true';
+    if (currentReductionCompleteOnly) url += '&positive=true';
     if (currentReductionDividendFilter !== null) url += `&dividend=${currentReductionDividendFilter}`;
     const grid = document.getElementById('stocksGrid');
     try {
@@ -563,7 +563,7 @@ async function loadReductionStocks() {
         const data = await response.json();
         const stocks = data.stocks || [];
         const summary = document.getElementById('reductionSummary');
-        if (summary) summary.textContent = `감액 이력 ${data.total || 0}개 종목 · 재원 계산 완료 ${data.complete_count || 0}개`;
+        if (summary) summary.textContent = `${currentReductionCompleteOnly ? '재원 남은 종목' : '감액 이력 전체'} ${data.total || 0}개`;
         grid.innerHTML = '';
         if (stocks.length === 0) {
             grid.innerHTML = '<div class="col-12 text-center text-muted mt-3">조건에 맞는 종목이 없습니다. 배당수익률 필터를 "전체"로 바꾸거나, 크롤러가 DART 자본변동표를 백필하는 중일 수 있습니다.</div>';
@@ -573,7 +573,7 @@ async function loadReductionStocks() {
             const isInWatchlist = window.watchlistManager &&
                 window.watchlistManager.getWatchlist().some(item => item.code === stock.code);
             const ry = stock.remaining_years;
-            let badgeClass = 'bg-secondary', badgeText = '집계 중';
+            let badgeClass = 'bg-secondary', badgeText = stock.history_complete ? '무배당' : '집계 중';
             if (ry !== null && ry !== undefined) {
                 badgeText = `${ry.toFixed(1)}년`;
                 badgeClass = ry >= 5 ? 'bg-success' : ry >= 2 ? 'bg-warning text-dark' : 'bg-danger';
